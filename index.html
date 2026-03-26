@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sono Clara">
+<meta name="theme-color" content="#5B4FC4">
+<title>Sono da Clara 🌙</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌙</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #FAF7F2; --card: #FFFFFF; --text: #2D2A4A; --soft: #8B87A8;
+  --nap: #7BA4F7; --nap-l: #D6E4FD; --night: #5B4FC4; --night-l: #D8D4F2;
+  --feed: #F5A962; --feed-l: #FDE8CD; --win: #5BC4A0; --win-l: #D0F0E4;
+  --accent: #E07BAD; --accent-l: #FADBE9; --danger: #EF6B6B; --border: #E8E4DD;
+  --bath: #64C8DC; --bath-l: #D4F1F7;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: 'Nunito', -apple-system, sans-serif; background: var(--bg); color: var(--text);
+  min-height: 100vh; min-height: -webkit-fill-available; overscroll-behavior: none;
+  padding-top: var(--safe-top); padding-bottom: calc(72px + var(--safe-bot));
+}
+button { font-family: inherit; cursor: pointer; border: none; outline: none; }
+input[type="datetime-local"] {
+  font-family: inherit; font-size: 14px; padding: 10px 12px; border: 2px solid var(--border);
+  border-radius: 12px; background: #fff; color: var(--text); width: 100%;
+}
+input[type="datetime-local"]:focus { border-color: var(--nap); }
+
+.header {
+  background: linear-gradient(135deg, #5B4FC4 0%, #7B6FD4 50%, #E07BAD 100%);
+  padding: 24px 20px 18px; border-radius: 0 0 28px 28px;
+}
+.header h1 { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+.header small { font-size: 12px; color: rgba(255,255,255,.65); font-weight: 500; }
+.sleeping-badge {
+  background: rgba(255,255,255,.15); border-radius: 12px; padding: 8px 14px; margin-top: 10px;
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: #fff; font-weight: 600;
+}
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:.4;} }
+.pulse { animation: pulse 2s infinite; }
+
+.content { padding: 0 16px 24px; }
+
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; background: #fff;
+  border-top: 1px solid var(--border); display: flex; z-index: 100;
+  padding-bottom: var(--safe-bot); box-shadow: 0 -2px 16px rgba(0,0,0,.06);
+}
+.nav-btn {
+  flex: 1; padding: 10px 4px 8px; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; background: none; font-size: 10px; font-weight: 700; color: var(--soft); transition: color .2s;
+}
+.nav-btn.active { color: var(--night); }
+.nav-btn span { font-size: 22px; }
+
+.card {
+  background: var(--card); border-radius: 16px; padding: 16px 18px;
+  box-shadow: 0 2px 12px rgba(45,42,74,.06); margin-bottom: 12px;
+}
+.card-title { font-size: 14px; font-weight: 800; margin-bottom: 10px; }
+.metric-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 12px; }
+.metric {
+  background: var(--card); border-radius: 14px; padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(45,42,74,.05); border-left: 4px solid var(--nap);
+}
+.metric .label { font-size: 11px; color: var(--soft); font-weight: 700; margin-bottom: 2px; }
+.metric .value { font-size: 24px; font-weight: 900; }
+.metric .sub { font-size: 10px; color: var(--soft); margin-top: 1px; }
+
+.quick-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; margin-bottom: 16px; }
+.quick-btn {
+  padding: 18px 8px; border-radius: 16px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; font-weight: 800; font-size: 13px; transition: all .15s;
+}
+.quick-btn:disabled { opacity: .35; pointer-events: none; }
+.quick-btn .icon { font-size: 28px; }
+
+.event-row {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  border-radius: 10px; margin-bottom: 6px;
+}
+.event-row .info { flex: 1; }
+.event-row .title { font-size: 13px; font-weight: 700; }
+.event-row .detail { font-size: 11px; color: var(--soft); }
+.del-btn { background: none; border: none; font-size: 16px; color: var(--danger); padding: 4px 8px; }
+
+.timeline-bar {
+  position: relative; height: 56px; border-radius: 10px; overflow: hidden;
+  background: linear-gradient(90deg, var(--night-l) 0%, var(--night-l) 33.3%, rgba(214,228,253,.15) 33.3%, rgba(214,228,253,.15) 79.2%, var(--night-l) 79.2%);
+}
+.tl-block {
+  position: absolute; top: 6px; height: 22px; border-radius: 5px; opacity: .85;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 9px; color: #fff; font-weight: 700; overflow: hidden; white-space: nowrap;
+}
+.tl-dot {
+  position: absolute; width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid #fff; transform: translateX(-5px); z-index: 2;
+}
+.tl-hours {
+  position: absolute; bottom: 1px; left: 0; right: 0; display: flex;
+  justify-content: space-between; padding: 0 4px;
+  font-size: 8px; color: var(--soft); font-weight: 700;
+}
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { text-align: left; padding: 8px 6px; color: var(--soft); font-weight: 700; font-size: 11px; border-bottom: 2px solid var(--border); }
+.data-table td { padding: 10px 6px; border-bottom: 1px solid var(--border); }
+.ok { color: var(--win); font-weight: 800; }
+.warn { color: var(--danger); font-weight: 800; }
+
+.period-row { display: flex; gap: 6px; margin-bottom: 14px; }
+.period-btn {
+  padding: 8px 18px; border-radius: 10px; border: 2px solid var(--border);
+  background: #fff; color: var(--soft); font-weight: 700; font-size: 13px;
+}
+.period-btn.active { border-color: var(--accent); background: var(--accent-l); color: var(--accent); }
+
+.day-scroll { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 14px; -webkit-overflow-scrolling: touch; }
+.day-scroll::-webkit-scrollbar { display: none; }
+.day-btn {
+  padding: 8px 14px; border-radius: 10px; border: 2px solid var(--border);
+  background: #fff; color: var(--soft); font-weight: 700; font-size: 12px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.day-btn.active { border-color: var(--accent); background: var(--accent-l); color: var(--accent); }
+
+.sync-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-btn {
+  flex: 1; min-width: 120px; padding: 14px; border-radius: 14px; font-weight: 700;
+  font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.chart-box { position: relative; height: 220px; margin-top: 8px; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+.fade { animation: fadeIn .35s ease; }
+.input-group { margin-bottom: 10px; }
+.input-group label { display: block; font-size: 11px; color: var(--soft); font-weight: 600; margin-bottom: 4px; }
+.add-btn { padding: 10px 20px; border-radius: 12px; color: #fff; font-weight: 800; font-size: 13px; width: 100%; margin-top: 6px; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--soft); }
+.empty-state .emoji { font-size: 36px; margin-bottom: 8px; }
+.reset-btn { display: block; margin: 24px auto; padding: 10px 24px; border-radius: 10px; border: 1px solid rgba(239,107,107,.3); background: transparent; color: var(--danger); font-weight: 600; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:32px">🌙</span>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · 3 meses</small></div>
+  </div>
+  <div id="sleeping-badge" class="sleeping-badge" style="display:none">
+    <span class="pulse">💤</span> <span id="sleeping-text"></span>
+  </div>
+</div>
+
+<div class="content" id="content"></div>
+
+<nav class="bottom-nav">
+  <button class="nav-btn active" data-tab="log" onclick="switchTab('log')"><span>📝</span>Registro</button>
+  <button class="nav-btn" data-tab="panel" onclick="switchTab('panel')"><span>📊</span>Painel</button>
+  <button class="nav-btn" data-tab="analytics" onclick="switchTab('analytics')"><span>📈</span>Análise</button>
+  <button class="nav-btn" data-tab="sync" onclick="switchTab('sync')"><span>🔄</span>Sync</button>
+</nav>
+
+<script>
+const SK='clara-sleep-v4';
+const REF={winMin:60,winMax:105,napsMin:3,napsMax:5,napMin:30,napMax:120,totalSleep:15};
+let D={sessions:[],feedings:[],baths:[]};
+let tab='log', selDay=dk(new Date()), period='week', charts={};
+
+function load(){try{const r=localStorage.getItem(SK);if(r){const p=JSON.parse(r);D={sessions:p.sessions||[],feedings:p.feedings||[],baths:p.baths||[]};}}catch(e){}}
+function save(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}badge();}
+function gid(){return Math.random().toString(36).slice(2,10);}
+
+function dk(d){const t=d instanceof Date?d:new Date(d);return`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;}
+function fm(d){if(!d)return'--:--';const t=new Date(d);return`${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;}
+function fd(d){const t=new Date(d),ds=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];return`${ds[t.getDay()]}, ${String(t.getDate()).padStart(2,'0')}/${String(t.getMonth()+1).padStart(2,'0')}`;}
+function fdr(m){if(!m&&m!==0)return'--';const h=Math.floor(m/60),mi=Math.round(m%60);return h>0?`${h}h${mi>0?String(mi).padStart(2,'0')+'m':''}`:  `${mi}min`;}
+function dm(a,b){return(new Date(b)-new Date(a))/60000;}
+function isN(t){const h=new Date(t).getHours();return h>=8&&h<19;}
+function openS(){return D.sessions.find(s=>!s.wakeTime);}
+
+function badge(){
+  const o=openS(),b=document.getElementById('sleeping-badge'),tx=document.getElementById('sleeping-text');
+  if(o){b.style.display='flex';const m=Math.round(dm(o.sleepTime,new Date().toISOString()));tx.textContent=`Clara dormindo desde ${fm(o.sleepTime)} (${fdr(m)})`;}
+  else b.style.display='none';
+}
+
+function dayData(day){
+  const ss=D.sessions.filter(s=>dk(s.sleepTime)===day&&s.wakeTime).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
+  const naps=ss.filter(s=>isN(s.sleepTime)),nights=ss.filter(s=>!isN(s.sleepTime));
+  const feeds=D.feedings.filter(f=>dk(f.time)===day),baths=D.baths.filter(b=>dk(b.time)===day);
+  const nd=naps.map(s=>dm(s.sleepTime,s.wakeTime)),wins=[];
+  const pn=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime).find(s=>dk(s.wakeTime)===day);
+  if(pn&&naps.length>0)wins.push(dm(pn.wakeTime,naps[0].sleepTime));
+  for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
+  const tn=nd.reduce((a,b)=>a+b,0),tni=nights.reduce((a,b)=>a+dm(b.sleepTime,b.wakeTime),0);
+  return{naps,nights,feeds,baths,nd,wins,nc:naps.length,fc:feeds.length,bc:baths.length,tn,tni,
+    an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
+    det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null}))};
+}
+
+function allDays(){const s=new Set();D.sessions.forEach(x=>{s.add(dk(x.sleepTime));if(x.wakeTime)s.add(dk(x.wakeTime));});D.feedings.forEach(x=>s.add(dk(x.time)));D.baths.forEach(x=>s.add(dk(x.time)));return[...s].sort();}
+
+function qSleep(){D.sessions.push({id:gid(),sleepTime:new Date().toISOString(),wakeTime:null});save();render();}
+function qWake(){const i=D.sessions.findIndex(s=>!s.wakeTime);if(i>=0){D.sessions[i].wakeTime=new Date().toISOString();save();render();}}
+function qFeed(){D.feedings.push({id:gid(),time:new Date().toISOString()});save();render();}
+function qBath(){D.baths.push({id:gid(),time:new Date().toISOString()});save();render();}
+
+function addMS(){const s=document.getElementById('m-sleep').value,w=document.getElementById('m-wake').value;if(!s||!w)return;D.sessions.push({id:gid(),sleepTime:new Date(s).toISOString(),wakeTime:new Date(w).toISOString()});save();render();}
+function addMF(){const f=document.getElementById('m-feed').value;if(!f)return;D.feedings.push({id:gid(),time:new Date(f).toISOString()});save();render();}
+function addMB(){const b=document.getElementById('m-bath').value;if(!b)return;D.baths.push({id:gid(),time:new Date(b).toISOString()});save();render();}
+function remS(id){D.sessions=D.sessions.filter(s=>s.id!==id);save();render();}
+function remF(id){D.feedings=D.feedings.filter(f=>f.id!==id);save();render();}
+function remB(id){D.baths=D.baths.filter(b=>b.id!==id);save();render();}
+
+function exportD(){const b=new Blob([JSON.stringify(D,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=`clara-sono-${dk(new Date())}.json`;a.click();URL.revokeObjectURL(u);}
+function importD(){const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{try{const im=JSON.parse(ev.target.result);if(!im.sessions||!im.feedings){alert('Arquivo inválido');return;}const ex=new Set([...D.sessions.map(s=>s.id),...D.feedings.map(f=>f.id),...D.baths.map(b=>b.id)]);let aS=0,aF=0,aB=0;(im.sessions||[]).forEach(s=>{if(!ex.has(s.id)){D.sessions.push(s);aS++;}});(im.feedings||[]).forEach(f=>{if(!ex.has(f.id)){D.feedings.push(f);aF++;}});(im.baths||[]).forEach(b=>{if(!ex.has(b.id)){D.baths.push(b);aB++;}});save();render();alert(`Importado! +${aS} sonos, +${aF} mamadas, +${aB} banhos`);}catch(e){alert('Erro: '+e.message);}};r.readAsText(f);};inp.click();}
+function clearAll(){if(confirm('Apagar TODOS os dados da Clara?')){D={sessions:[],feedings:[],baths:[]};save();render();}}
+
+function switchTab(t){tab=t;document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));render();}
+
+function render(){
+  Object.values(charts).forEach(c=>c.destroy());charts={};
+  const el=document.getElementById('content');
+  if(tab==='log')rLog(el);else if(tab==='panel')rPanel(el);else if(tab==='analytics')rAna(el);else rSync(el);
+  badge();
+}
+
+function rLog(el){
+  const sl=!!openS(),td=dayData(dk(new Date()));
+  const evs=[...td.naps.map(s=>({...s,_t:'nap',_s:new Date(s.sleepTime)})),...td.nights.map(s=>({...s,_t:'night',_s:new Date(s.sleepTime)})),...td.feeds.map(f=>({...f,_t:'feed',_s:new Date(f.time)})),...td.baths.map(b=>({...b,_t:'bath',_s:new Date(b.time)}))].sort((a,b)=>a._s-b._s);
+
+  el.innerHTML=`<div class="fade" style="padding-top:16px">
+    <div class="card-title">⚡ Registro rápido</div>
+    <div class="quick-grid">
+      <button class="quick-btn" style="background:${sl?'#f0f0f0':'var(--nap-l)'};color:var(--nap)" onclick="qSleep()" ${sl?'disabled':''}><span class="icon">😴</span>Dormiu</button>
+      <button class="quick-btn" style="background:${!sl?'#f0f0f0':'var(--night-l)'};color:var(--night)" onclick="qWake()" ${!sl?'disabled':''}><span class="icon">👶</span>Acordou</button>
+      <button class="quick-btn" style="background:var(--feed-l);color:var(--feed)" onclick="qFeed()"><span class="icon">🍼</span>Mamou</button>
+      <button class="quick-btn" style="background:var(--bath-l);color:var(--bath)" onclick="qBath()"><span class="icon">🛁</span>Banho</button>
+    </div>
+    <div class="card"><div class="card-title">✏️ Sono manual</div>
+      <div class="input-group"><label>Dormiu</label><input type="datetime-local" id="m-sleep"></div>
+      <div class="input-group"><label>Acordou</label><input type="datetime-local" id="m-wake"></div>
+      <button class="add-btn" style="background:var(--nap)" onclick="addMS()">+ Adicionar sono</button>
+    </div>
+    <div class="card"><div class="card-title">✏️ Mamada manual</div>
+      <div class="input-group"><label>Horário</label><input type="datetime-local" id="m-feed"></div>
+      <button class="add-btn" style="background:var(--feed)" onclick="addMF()">+ Adicionar mamada</button>
+    </div>
+    <div class="card"><div class="card-title">✏️ Banho manual</div>
+      <div class="input-group"><label>Horário</label><input type="datetime-local" id="m-bath"></div>
+      <button class="add-btn" style="background:var(--bath)" onclick="addMB()">+ Adicionar banho</button>
+    </div>
+    <div class="card"><div class="card-title">📋 Eventos de hoje</div>
+      ${evs.length===0?'<div class="empty-state"><div class="emoji">📋</div><div>Nenhum registro hoje</div></div>':
+      evs.map(ev=>{
+        const c={nap:{i:'☀️',b:'var(--nap-l)',t:`Soneca — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`:''}, night:{i:'🌙',b:'var(--night-l)',t:`Noite — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`:''}, feed:{i:'🍼',b:'var(--feed-l)',t:`Mamada — ${fm(ev.time)}`,d:''}, bath:{i:'🛁',b:'var(--bath-l)',t:`Banho — ${fm(ev.time)}`,d:''}}[ev._t];
+        const df=ev._t==='feed'?`remF('${ev.id}')`:ev._t==='bath'?`remB('${ev.id}')`:  `remS('${ev.id}')`;
+        return`<div class="event-row" style="background:${c.b}"><span style="font-size:18px">${c.i}</span><div class="info"><div class="title">${c.t}</div>${c.d?`<div class="detail">${c.d}</div>`:''}</div><button class="del-btn" onclick="${df}">✕</button></div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function rPanel(el){
+  const days=allDays().slice(-10),d=dayData(selDay);
+  const dss=D.sessions.filter(s=>{const sk=dk(s.sleepTime);return sk===selDay||(s.wakeTime&&dk(s.wakeTime)===selDay);}),dfe=D.feedings.filter(f=>dk(f.time)===selDay),dba=D.baths.filter(b=>dk(b.time)===selDay);
+  const ds=new Date(selDay+'T00:00:00').getTime();
+  let tb='',tf='',tba='';
+  dss.forEach(s=>{const st=Math.max(0,(new Date(s.sleepTime).getTime()-ds)/864e5),en=s.wakeTime?Math.min(1,(new Date(s.wakeTime).getTime()-ds)/864e5):Math.min(1,(Date.now()-ds)/864e5),co=isN(s.sleepTime)?'var(--nap)':'var(--night)',w=Math.max(.5,(en-st)*100),lb=w>4?(s.wakeTime?fdr(dm(s.sleepTime,s.wakeTime)):'💤'):'';tb+=`<div class="tl-block" style="left:${st*100}%;width:${w}%;background:${co}">${lb}</div>`;});
+  dfe.forEach(f=>{const p=(new Date(f.time).getTime()-ds)/864e5;tf+=`<div class="tl-dot" style="left:${p*100}%;top:31px;background:var(--feed)"></div>`;});
+  dba.forEach(b=>{const p=(new Date(b.time).getTime()-ds)/864e5;tba+=`<div class="tl-dot" style="left:${p*100}%;top:43px;background:var(--bath);border-radius:3px"></div>`;});
+
+  let tr='';
+  d.det.forEach((n,i)=>{const dok=n.dur>=REF.napMin&&n.dur<=REF.napMax,wok=n.win===null||(n.win>=REF.winMin&&n.win<=REF.winMax);tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${n.win===null?'':(wok?'ok':'warn')}">${n.win!==null?fdr(n.win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
+
+  el.innerHTML=`<div class="fade" style="padding-top:16px">
+    <div class="day-scroll">${days.map(dy=>`<button class="day-btn ${dy===selDay?'active':''}" onclick="selDay='${dy}';render()">${fd(dy+'T12:00:00')}</button>`).join('')}${days.length===0?'<span style="font-size:13px;color:var(--soft)">Registre dados primeiro</span>':''}</div>
+    <div class="metric-grid">
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Sonecas</div><div class="value">${d.nc}</div><div class="sub">Ref: ${REF.napsMin}–${REF.napsMax}</div></div>
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Duração Média</div><div class="value" style="font-size:20px">${fdr(d.an)}</div><div class="sub">Ref: ${fdr(REF.napMin)}–${fdr(REF.napMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Janela Média</div><div class="value" style="font-size:20px">${fdr(d.aw)}</div><div class="sub">Ref: ${fdr(REF.winMin)}–${fdr(REF.winMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--feed)"><div class="label">🍼 Mamadas</div><div class="value">${d.fc}</div></div>
+    </div>
+    <div class="metric" style="border-left-color:var(--bath);margin-bottom:12px"><div class="label">🛁 Banhos</div><div class="value">${d.bc}</div>${d.baths.length>0?`<div class="sub">Horários: ${d.baths.map(b=>fm(b.time)).join(', ')}</div>`:''}</div>
+    <div class="card"><div class="card-title">📅 Linha do tempo — ${fd(selDay+'T12:00:00')}</div>
+      <div class="timeline-bar">${tb}${tf}${tba}<div class="tl-hours"><span>00h</span><span>04h</span><span>08h</span><span>12h</span><span>16h</span><span>20h</span></div></div>
+      <div style="font-size:11px;color:var(--soft);margin-top:8px">🟦 Soneca &nbsp; 🟪 Noite &nbsp; 🟠 Mamada &nbsp; 🔵 Banho</div>
+    </div>
+    ${d.det.length>0?`<div class="card"><div class="card-title">☀️ Detalhes das sonecas</div><div style="overflow-x:auto"><table class="data-table"><thead><tr><th>#</th><th>Dormiu</th><th>Acordou</th><th>Duração</th><th>Janela</th></tr></thead><tbody>${tr}</tbody></table></div><div style="font-size:10px;color:var(--soft);margin-top:8px">✓ Na faixa &nbsp;|&nbsp; ⚠ Fora da referência (3 meses)</div></div>`:''}
+    <div class="metric-grid">
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Total Sonecas</div><div class="value" style="font-size:20px">${fdr(d.tn)}</div></div>
+      <div class="metric" style="border-left-color:var(--night)"><div class="label">🌙 Total Noite</div><div class="value" style="font-size:20px">${fdr(d.tni)}</div></div>
+    </div>
+    <div class="metric" style="border-left-color:var(--accent);margin-bottom:12px"><div class="label">💤 Total Geral</div><div class="value">${fdr(d.tn+d.tni)}</div><div class="sub">Ref: ~${REF.totalSleep}h/dia</div></div>
+  </div>`;
+}
+
+function rAna(el){
+  const now=new Date();let dl=[];const rng=period==='week'?6:29;
+  for(let i=rng;i>=0;i--){const x=new Date(now);x.setDate(x.getDate()-i);dl.push(dk(x));}
+  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0);
+  const aN=ad.length?(ad.reduce((a,b)=>a+b.nc,0)/ad.length).toFixed(1):'--';
+  const aD=ad.length?fdr(ad.reduce((a,b)=>a+b.an,0)/ad.length):'--';
+  const aW=ad.length?fdr(ad.reduce((a,b)=>a+b.aw,0)/ad.length):'--';
+  const tB=ad.reduce((a,b)=>a+b.bc,0);
+
+  el.innerHTML=`<div class="fade" style="padding-top:16px">
+    <div class="period-row"><button class="period-btn ${period==='week'?'active':''}" onclick="period='week';render()">7 dias</button><button class="period-btn ${period==='month'?'active':''}" onclick="period='month';render()">30 dias</button></div>
+    ${ad.length===0?'<div class="empty-state"><div class="emoji">📊</div><div style="font-weight:700">Sem dados no período</div><div style="font-size:13px">Registre na aba Registro</div></div>':`
+    <div class="metric-grid">
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Média Sonecas/dia</div><div class="value">${aN}</div><div class="sub">Ref: ${REF.napsMin}–${REF.napsMax}</div></div>
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Média Duração</div><div class="value" style="font-size:20px">${aD}</div></div>
+    </div>
+    <div class="metric-grid">
+      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Média Janela</div><div class="value" style="font-size:20px">${aW}</div><div class="sub">Ref: ${fdr(REF.winMin)}–${fdr(REF.winMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--bath)"><div class="label">🛁 Total Banhos</div><div class="value">${tB}</div></div>
+    </div>
+    <div class="card"><div class="card-title">⏱️ Duração média das sonecas</div><div class="chart-box"><canvas id="ch-dur"></canvas></div></div>
+    <div class="card"><div class="card-title">👀 Janela de sono</div><div class="chart-box"><canvas id="ch-win"></canvas></div></div>
+    <div class="card"><div class="card-title">💤 Total de sono por dia</div><div class="chart-box"><canvas id="ch-tot"></canvas></div></div>
+    <div class="card"><div class="card-title">🍼 Mamadas por dia</div><div class="chart-box"><canvas id="ch-fed"></canvas></div></div>
+    <div class="card"><div class="card-title">☀️ Sonecas por dia</div><div class="chart-box"><canvas id="ch-nap"></canvas></div></div>
+    `}</div>`;
+
+  if(!ad.length)return;
+  const lb=ad.map(d=>d.label);
+  const bo={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10,family:'Nunito'}}},y:{ticks:{font:{size:10,family:'Nunito'}}}}};
+  const to=JSON.parse(JSON.stringify(bo));to.plugins.tooltip={callbacks:{label:c=>`${c.dataset.label}: ${fdr(c.raw)}`}};to.scales.y.ticks.callback=v=>fdr(v);
+  charts.dur=new Chart(document.getElementById('ch-dur'),{type:'bar',data:{labels:lb,datasets:[{label:'Duração',data:ad.map(d=>d.an),backgroundColor:'#7BA4F7',borderRadius:6}]},options:to});
+  charts.win=new Chart(document.getElementById('ch-win'),{type:'line',data:{labels:lb,datasets:[{label:'Janela',data:ad.map(d=>d.aw),borderColor:'#5BC4A0',backgroundColor:'rgba(91,196,160,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#5BC4A0'},{label:'Máx',data:ad.map(()=>REF.winMax),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false},{label:'Mín',data:ad.map(()=>REF.winMin),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false}]},options:to});
+  const so=JSON.parse(JSON.stringify(to));so.scales.x.stacked=true;so.scales.y.stacked=true;
+  charts.tot=new Chart(document.getElementById('ch-tot'),{type:'bar',data:{labels:lb,datasets:[{label:'Sonecas',data:ad.map(d=>d.tn),backgroundColor:'#7BA4F7'},{label:'Noite',data:ad.map(d=>d.tni),backgroundColor:'#5B4FC4',borderRadius:{topLeft:6,topRight:6}}]},options:so});
+  charts.fed=new Chart(document.getElementById('ch-fed'),{type:'bar',data:{labels:lb,datasets:[{label:'Mamadas',data:ad.map(d=>d.fc),backgroundColor:'#F5A962',borderRadius:6}]},options:{...bo,scales:{...bo.scales,y:{...bo.scales.y,ticks:{...bo.scales.y.ticks,stepSize:1}}}}});
+  charts.nap=new Chart(document.getElementById('ch-nap'),{type:'bar',data:{labels:lb,datasets:[{label:'Sonecas',data:ad.map(d=>d.nc),backgroundColor:'#7BA4F7',borderRadius:6}]},options:{...bo,scales:{...bo.scales,y:{...bo.scales.y,ticks:{...bo.scales.y.ticks,stepSize:1}}}}});
+}
+
+function rSync(el){
+  const ts=D.sessions.length,tf=D.feedings.length,tb=D.baths.length;
+  el.innerHTML=`<div class="fade" style="padding-top:16px">
+    <div class="card"><div class="card-title">🔄 Sincronização</div>
+      <p style="font-size:13px;color:var(--soft);margin-bottom:16px;line-height:1.5">Para usar em dois celulares: exporte em um, importe no outro. A importação faz <strong>merge</strong> — só adiciona novos.</p>
+      <div style="font-size:13px;margin-bottom:16px;padding:12px;background:var(--nap-l);border-radius:10px">📊 <strong>${ts}</strong> sonos · <strong>${tf}</strong> mamadas · <strong>${tb}</strong> banhos</div>
+      <div class="sync-row"><button class="sync-btn" style="background:var(--win-l);color:var(--win)" onclick="exportD()">📤 Exportar</button><button class="sync-btn" style="background:var(--nap-l);color:var(--nap)" onclick="importD()">📥 Importar</button></div>
+    </div>
+    <div class="card"><div class="card-title">📱 Instalar no iPhone</div>
+      <div style="font-size:13px;color:var(--soft);line-height:1.8"><strong>1.</strong> Abra no <strong>Safari</strong><br><strong>2.</strong> Toque em <strong>⬆️ Compartilhar</strong><br><strong>3.</strong> Toque em <strong>"Adicionar à Tela de Início"</strong><br><strong>4.</strong> Pronto! Vira um app 🎉</div>
+    </div>
+    <div class="card"><div class="card-title">💡 Backup semanal</div>
+      <div style="font-size:13px;color:var(--soft);line-height:1.7">Exporte o JSON <strong>1x por semana</strong> e mande pra vocês mesmos no WhatsApp. Funciona como backup automático.</div>
+    </div>
+    <div class="card" style="border-left:3px solid var(--danger)"><div class="card-title">⚠️ Zona perigosa</div><button class="reset-btn" onclick="clearAll()" style="margin:0">🗑 Apagar todos os dados</button></div>
+  </div>`;
+}
+
+load();render();
+setInterval(badge,60000);
+</script>
+</body>
+</html>
