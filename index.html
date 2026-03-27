@@ -244,6 +244,34 @@ function addMB(){
   D.baths.push({id:gid(),time:new Date(b).toISOString(),note:n||''});
   save();render();
 }
+function addNW(){
+  const w=document.getElementById('nw-woke').value,s=document.getElementById('nw-slept').value,n=document.getElementById('nw-note').value;
+  if(!w||!s)return;
+  const wokeAt=new Date(w).getTime(),sleptAt=new Date(s).getTime();
+  if(sleptAt<=wokeAt){alert('Horário de voltar a dormir deve ser depois de acordar');return;}
+  // Find session that spans this waking and split it
+  const idx=D.sessions.findIndex(ses=>{
+    if(!ses.wakeTime)return false;
+    const st=new Date(ses.sleepTime).getTime(),wk=new Date(ses.wakeTime).getTime();
+    return st<wokeAt&&wk>sleptAt;
+  });
+  if(idx>=0){
+    const orig=D.sessions[idx];
+    const origEnd=orig.wakeTime;
+    // First half: original sleep → woke up
+    orig.wakeTime=new Date(w).toISOString();
+    // Second half: went back to sleep → original wake
+    D.sessions.push({id:gid(),sleepTime:new Date(s).toISOString(),wakeTime:origEnd,note:n||''});
+  } else {
+    // No spanning session found — create two sessions around the gap
+    // Session before: ends when baby woke
+    // Session after: starts when baby slept again
+    // User probably hasn't registered night as single block, just add gap markers
+    alert('Nenhum sono noturno encontrado nesse horário. Registre o sono noturno primeiro, depois adicione o despertar.');
+    return;
+  }
+  save();render();
+}
 function remS(id){if(!confirm('Excluir este registro de sono?'))return;D.sessions=D.sessions.filter(s=>s.id!==id);save();render();}
 function remF(id){if(!confirm('Excluir esta mamada?'))return;D.feedings=D.feedings.filter(f=>f.id!==id);save();render();}
 function remB(id){if(!confirm('Excluir este banho?'))return;D.baths=D.baths.filter(b=>b.id!==id);save();render();}
@@ -372,6 +400,13 @@ function rLog(el){
       <div class="input-group"><label>Horário</label><input type="datetime-local" id="m-bath"></div>
       <div class="input-group"><label>Nota (opcional)</label><textarea id="m-bath-note" placeholder="Ex: banho morno, chorou..."></textarea></div>
       <button class="add-btn" style="background:var(--bath)" onclick="addMB()">+ Adicionar banho</button>
+    </div>
+    <div class="card" style="border-left:3px solid var(--danger)"><div class="card-title">⚡ Despertar noturno</div>
+      <div style="font-size:12px;color:var(--soft);margin-bottom:10px;line-height:1.5">Registre quando Clara acordou durante a noite. O sono noturno correspondente será dividido automaticamente.</div>
+      <div class="input-group"><label>Hora que acordou</label><input type="datetime-local" id="nw-woke"></div>
+      <div class="input-group"><label>Hora que voltou a dormir</label><input type="datetime-local" id="nw-slept"></div>
+      <div class="input-group"><label>Nota (opcional)</label><textarea id="nw-note" placeholder="Ex: mamou, chorou muito, só resmungou..."></textarea></div>
+      <button class="add-btn" style="background:var(--danger)" onclick="addNW()">+ Registrar despertar</button>
     </div>
     <div class="card"><div class="card-title">📋 Eventos de hoje</div>
       ${evs.length===0?'<div class="empty-state"><div class="emoji">📋</div><div>Nenhum registro hoje</div></div>':evs.map(ev=>evHTML(ev)).join('')}
