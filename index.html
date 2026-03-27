@@ -176,6 +176,31 @@ function badge(){
   else b.style.display='none';
 }
 
+// Night of day X = 20:00 day X → 07:00 day X+1
+function nightData(day){
+  const nightStart=new Date(day+'T20:00:00').getTime();
+  const nd=new Date(day+'T00:00:00');nd.setDate(nd.getDate()+1);
+  const nightEnd=new Date(dk(nd)+'T07:00:00').getTime();
+  // All completed night sessions overlapping this window
+  const ns=D.sessions.filter(s=>{
+    if(!s.wakeTime)return false;
+    const st=new Date(s.sleepTime).getTime(),wk=new Date(s.wakeTime).getTime();
+    return st>=nightStart&&st<nightEnd;
+  }).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
+  // Wakings = gaps between consecutive sessions
+  const wakings=[];
+  for(let i=0;i<ns.length-1;i++){
+    const wokeAt=ns[i].wakeTime,sleptAt=ns[i+1].sleepTime;
+    const dur=dm(wokeAt,sleptAt);
+    if(dur>0)wakings.push({wokeAt,sleptAt,dur,feedsDuring:D.feedings.filter(f=>{const ft=new Date(f.time).getTime();return ft>=new Date(wokeAt).getTime()&&ft<=new Date(sleptAt).getTime();}).length});
+  }
+  const totalAwake=wakings.reduce((a,w)=>a+w.dur,0);
+  const totalSleep=ns.reduce((a,s)=>a+dm(s.sleepTime,s.wakeTime),0);
+  const firstSleep=ns.length?ns[0].sleepTime:null;
+  const lastWake=ns.length?ns[ns.length-1].wakeTime:null;
+  return{sessions:ns,wakings,wakeCount:wakings.length,totalAwake,totalSleep,firstSleep,lastWake};
+}
+
 function dayData(day){
   const ss=D.sessions.filter(s=>dk(s.sleepTime)===day&&s.wakeTime).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
   const naps=ss.filter(s=>isN(s.sleepTime)),nights=ss.filter(s=>!isN(s.sleepTime));
@@ -185,9 +210,11 @@ function dayData(day){
   if(pn&&naps.length>0)wins.push(dm(pn.wakeTime,naps[0].sleepTime));
   for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
   const tn=nd.reduce((a,b)=>a+b,0),tni=nights.reduce((a,b)=>a+dm(b.sleepTime,b.wakeTime),0);
+  const nw=nightData(day);
   return{naps,nights,feeds,baths,nd,wins,nc:naps.length,fc:feeds.length,bc:baths.length,tn,tni,
     an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
-    det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null}))};
+    det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null})),
+    nw};
 }
 
 function allDays(){const s=new Set();D.sessions.forEach(x=>{s.add(dk(x.sleepTime));if(x.wakeTime)s.add(dk(x.wakeTime));});D.feedings.forEach(x=>s.add(dk(x.time)));D.baths.forEach(x=>s.add(dk(x.time)));return[...s].sort();}
@@ -435,6 +462,27 @@ function rPanel(el){
       <div style="font-size:11px;color:var(--soft);margin-top:8px">🟦 Soneca &nbsp; 🟪 Noite &nbsp; 🟠 Mamada &nbsp; 🔵 Banho</div>
     </div>
     ${d.det.length>0?`<div class="card"><div class="card-title">☀️ Detalhes das sonecas</div><div style="overflow-x:auto"><table class="data-table"><thead><tr><th>#</th><th>Dormiu</th><th>Acordou</th><th>Duração</th><th>Janela</th></tr></thead><tbody>${tr}</tbody></table></div><div style="font-size:10px;color:var(--soft);margin-top:8px">✓ Na faixa &nbsp;|&nbsp; ⚠ Fora da referência (3 meses)</div></div>`:''}
+    ${d.nw.sessions.length>0?`<div class="card"><div class="card-title">🌙 Noite de ${fd(selDay+'T12:00:00')}</div>
+      <div class="metric-grid" style="margin-bottom:14px">
+        <div class="metric" style="border-left-color:var(--night)"><div class="label">😴 Dormiu às</div><div class="value" style="font-size:20px">${fm(d.nw.firstSleep)}</div></div>
+        <div class="metric" style="border-left-color:var(--night)"><div class="label">👶 Acordou às</div><div class="value" style="font-size:20px">${fm(d.nw.lastWake)}</div></div>
+      </div>
+      <div class="metric-grid" style="margin-bottom:14px">
+        <div class="metric" style="border-left-color:var(--danger)"><div class="label">⚡ Despertares</div><div class="value">${d.nw.wakeCount}</div></div>
+        <div class="metric" style="border-left-color:var(--danger)"><div class="label">⏱️ Total acordada</div><div class="value" style="font-size:20px">${fdr(d.nw.totalAwake)}</div></div>
+      </div>
+      ${d.nw.wakings.length>0?`<div style="overflow-x:auto"><table class="data-table">
+        <thead><tr><th>#</th><th>Acordou</th><th>Dormiu</th><th>Duração</th><th>Mamou?</th></tr></thead>
+        <tbody>${d.nw.wakings.map((w,i)=>`<tr>
+          <td style="font-weight:800">${i+1}º</td>
+          <td>${fm(w.wokeAt)}</td>
+          <td>${fm(w.sleptAt)}</td>
+          <td style="font-weight:700;color:${w.dur>30?'var(--danger)':'var(--win)'}">${fdr(w.dur)}</td>
+          <td>${w.feedsDuring>0?'🍼 Sim':  '—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:10px;color:var(--soft);margin-top:8px">Despertares > 30min destacados em vermelho</div>`:''}
+    </div>`:''}
     <div class="metric-grid">
       <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Total Sonecas</div><div class="value" style="font-size:20px">${fdr(d.tn)}</div></div>
       <div class="metric" style="border-left-color:var(--night)"><div class="label">🌙 Total Noite</div><div class="value" style="font-size:20px">${fdr(d.tni)}</div></div>
@@ -447,11 +495,12 @@ function rPanel(el){
 function rAna(el){
   const now=new Date();let dl=[];const rng=period==='week'?6:29;
   for(let i=rng;i>=0;i--){const x=new Date(now);x.setDate(x.getDate()-i);dl.push(dk(x));}
-  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0);
+  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc,nwc:d.nw.wakeCount,nwa:Math.round(d.nw.totalAwake)};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0||d.nwc>0);
   const aN=ad.length?(ad.reduce((a,b)=>a+b.nc,0)/ad.length).toFixed(1):'--';
   const aD=ad.length?fdr(ad.reduce((a,b)=>a+b.an,0)/ad.length):'--';
   const aW=ad.length?fdr(ad.reduce((a,b)=>a+b.aw,0)/ad.length):'--';
   const tB=ad.reduce((a,b)=>a+b.bc,0);
+  const aNW=ad.length?(ad.reduce((a,b)=>a+b.nwc,0)/ad.length).toFixed(1):'--';
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
     <div class="period-row"><button class="period-btn ${period==='week'?'active':''}" onclick="period='week';render()">7 dias</button><button class="period-btn ${period==='month'?'active':''}" onclick="period='month';render()">30 dias</button></div>
@@ -464,8 +513,10 @@ function rAna(el){
       <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Média Janela</div><div class="value" style="font-size:20px">${aW}</div><div class="sub">Ref: ${fdr(REF.winMin)}–${fdr(REF.winMax)}</div></div>
       <div class="metric" style="border-left-color:var(--bath)"><div class="label">🛁 Total Banhos</div><div class="value">${tB}</div></div>
     </div>
+    <div class="metric" style="border-left-color:var(--danger);margin-bottom:12px"><div class="label">⚡ Média Despertares/noite</div><div class="value">${aNW}</div></div>
     <div class="card"><div class="card-title">⏱️ Duração média das sonecas</div><div class="chart-box"><canvas id="ch-dur"></canvas></div></div>
     <div class="card"><div class="card-title">👀 Janela de sono</div><div class="chart-box"><canvas id="ch-win"></canvas></div></div>
+    <div class="card"><div class="card-title">⚡ Despertares noturnos</div><div class="chart-box"><canvas id="ch-nwk"></canvas></div></div>
     <div class="card"><div class="card-title">💤 Total de sono por dia</div><div class="chart-box"><canvas id="ch-tot"></canvas></div></div>
     <div class="card"><div class="card-title">🍼 Mamadas por dia</div><div class="chart-box"><canvas id="ch-fed"></canvas></div></div>
     <div class="card"><div class="card-title">☀️ Sonecas por dia</div><div class="chart-box"><canvas id="ch-nap"></canvas></div></div>
@@ -477,6 +528,7 @@ function rAna(el){
   const to=JSON.parse(JSON.stringify(bo));to.plugins.tooltip={callbacks:{label:c=>`${c.dataset.label}: ${fdr(c.raw)}`}};to.scales.y.ticks.callback=v=>fdr(v);
   charts.dur=new Chart(document.getElementById('ch-dur'),{type:'bar',data:{labels:lb,datasets:[{label:'Duração',data:ad.map(d=>d.an),backgroundColor:'#7BA4F7',borderRadius:6}]},options:to});
   charts.win=new Chart(document.getElementById('ch-win'),{type:'line',data:{labels:lb,datasets:[{label:'Janela',data:ad.map(d=>d.aw),borderColor:'#5BC4A0',backgroundColor:'rgba(91,196,160,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#5BC4A0'},{label:'Máx',data:ad.map(()=>REF.winMax),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false},{label:'Mín',data:ad.map(()=>REF.winMin),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false}]},options:to});
+  charts.nwk=new Chart(document.getElementById('ch-nwk'),{type:'bar',data:{labels:lb,datasets:[{label:'Despertares',data:ad.map(d=>d.nwc),backgroundColor:'#EF6B6B',borderRadius:6}]},options:{...bo,scales:{...bo.scales,y:{...bo.scales.y,ticks:{...bo.scales.y.ticks,stepSize:1}}}}});
   const so=JSON.parse(JSON.stringify(to));so.scales.x.stacked=true;so.scales.y.stacked=true;
   charts.tot=new Chart(document.getElementById('ch-tot'),{type:'bar',data:{labels:lb,datasets:[{label:'Sonecas',data:ad.map(d=>d.tn),backgroundColor:'#7BA4F7'},{label:'Noite',data:ad.map(d=>d.tni),backgroundColor:'#5B4FC4',borderRadius:{topLeft:6,topRight:6}}]},options:so});
   charts.fed=new Chart(document.getElementById('ch-fed'),{type:'bar',data:{labels:lb,datasets:[{label:'Mamadas',data:ad.map(d=>d.fc),backgroundColor:'#F5A962',borderRadius:6}]},options:{...bo,scales:{...bo.scales,y:{...bo.scales.y,ticks:{...bo.scales.y.ticks,stepSize:1}}}}});
