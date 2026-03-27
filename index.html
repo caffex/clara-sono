@@ -185,7 +185,7 @@ function nightData(day){
   const ns=D.sessions.filter(s=>{
     if(!s.wakeTime)return false;
     const st=new Date(s.sleepTime).getTime(),wk=new Date(s.wakeTime).getTime();
-    return st>=nightStart&&st<nightEnd;
+    return wk>st&&st>=nightStart&&st<nightEnd;
   }).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
   // Wakings = gaps between consecutive sessions
   const wakings=[];
@@ -202,15 +202,16 @@ function nightData(day){
 }
 
 function dayData(day){
-  const ss=D.sessions.filter(s=>dk(s.sleepTime)===day&&s.wakeTime).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
+  const ss=D.sessions.filter(s=>dk(s.sleepTime)===day&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
   const naps=ss.filter(s=>isN(s.sleepTime)),nights=ss.filter(s=>!isN(s.sleepTime));
   const feeds=D.feedings.filter(f=>dk(f.time)===day),baths=D.baths.filter(b=>dk(b.time)===day);
   const nd=naps.map(s=>dm(s.sleepTime,s.wakeTime)),wins=[];
-  const pn=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime).find(s=>dk(s.wakeTime)===day);
+  const pn=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0).find(s=>dk(s.wakeTime)===day);
   if(pn&&naps.length>0)wins.push(dm(pn.wakeTime,naps[0].sleepTime));
   for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
-  const tn=nd.reduce((a,b)=>a+b,0),tni=nights.reduce((a,b)=>a+dm(b.sleepTime,b.wakeTime),0);
+  const tn=nd.reduce((a,b)=>a+b,0);
   const nw=nightData(day);
+  const tni=nw.totalSleep;
   return{naps,nights,feeds,baths,nd,wins,nc:naps.length,fc:feeds.length,bc:baths.length,tn,tni,
     an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
     det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null})),
@@ -323,9 +324,10 @@ function render(){
 
 // ===== EVENT ROW HTML =====
 function evHTML(ev){
+  const isInverted=ev.sleepTime&&ev.wakeTime&&dm(ev.sleepTime,ev.wakeTime)<0;
   const c={
-    nap:{i:'☀️',b:'var(--nap-l)',t:`Soneca — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`:ev.wakeTime===null?'💤 Dormindo...':''},
-    night:{i:'🌙',b:'var(--night-l)',t:`Noite — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`:ev.wakeTime===null?'💤 Dormindo...':''},
+    nap:{i:'☀️',b:isInverted?'#FDEAEA':'var(--nap-l)',t:`Soneca — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?(isInverted?'⚠️ Horários invertidos! Edite este registro.':`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`):ev.wakeTime===null?'💤 Dormindo...':''},
+    night:{i:'🌙',b:isInverted?'#FDEAEA':'var(--night-l)',t:`Noite — ${fm(ev.sleepTime)} → ${fm(ev.wakeTime)}`,d:ev.wakeTime?(isInverted?'⚠️ Horários invertidos! Edite este registro.':`Duração: ${fdr(dm(ev.sleepTime,ev.wakeTime))}`):ev.wakeTime===null?'💤 Dormindo...':''},
     feed:{i:'🍼',b:'var(--feed-l)',t:`Mamada — ${fm(ev.time)}`,d:''},
     bath:{i:'🛁',b:'var(--bath-l)',t:`Banho — ${fm(ev.time)}`,d:''},
   }[ev._t];
