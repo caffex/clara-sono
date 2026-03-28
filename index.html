@@ -152,7 +152,7 @@ body.dark .acc-day{background:var(--card);}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.0</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.1</small></div>
   </div>
   <div id="sync-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:8px;padding:4px 10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.8);font-weight:600">☁️ Sync ativo</div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
@@ -233,7 +233,7 @@ async function gistPush(){
       if(remoteContent){
         const remote=JSON.parse(remoteContent);
         const{merged,added}=mergeData(D,remote);
-        D=merged;save();
+        D=merged;_syncing=true;save();_syncing=false;
       }
     }
     // Now push merged data
@@ -255,14 +255,29 @@ async function gistPull(){
     if(!content){syncStatus='❌ Arquivo não encontrado no Gist';render();return;}
     const remote=JSON.parse(content);
     const{merged,added}=mergeData(D,remote);
-    D=merged;save();
+    D=merged;_syncing=true;save();_syncing=false;
     lastSync=new Date().toISOString();saveGistConfig();
     syncStatus=`✅ Sincronizado! +${added} registros novos`;render();
   }catch(e){syncStatus='❌ Erro: '+e.message;render();}
 }
 async function autoSync(){
   if(!gistToken||!gistId)return;
-  try{await gistPush();}catch(e){}
+  try{
+    // Silent push - no render, no status updates
+    const getRes=await fetch('https://api.github.com/gists/'+gistId,{headers:{'Authorization':'token '+gistToken}});
+    if(getRes.ok){
+      const gist=await getRes.json();
+      const remoteContent=gist.files['clara-sono-data.json']?.content;
+      if(remoteContent){
+        const remote=JSON.parse(remoteContent);
+        const{merged,added}=mergeData(D,remote);
+        if(added>0){D=merged;_syncing=true;save();_syncing=false;}
+      }
+    }
+    const res=await fetch('https://api.github.com/gists/'+gistId,{method:'PATCH',headers:{'Authorization':'token '+gistToken,'Content-Type':'application/json'},
+      body:JSON.stringify({files:{'clara-sono-data.json':{content:JSON.stringify(D,null,2)}}})});
+    if(res.ok){lastSync=new Date().toISOString();saveGistConfig();}
+  }catch(e){}
 }
 
 // ===== PERSIST =====
@@ -277,8 +292,8 @@ function load(){
   }catch(e){}
 }
 function save(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}badge();debouncedSync();}
-let _syncTimer=null;
-function debouncedSync(){if(!gistToken||!gistId)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(()=>autoSync(),5000);}
+let _syncTimer=null,_syncing=false;
+function debouncedSync(){if(!gistToken||!gistId||_syncing)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(()=>autoSync(),5000);}
 function gid(){return Math.random().toString(36).slice(2,10);}
 
 // ===== HELPERS =====
@@ -330,7 +345,8 @@ function dayData(day){
   const naps=ss.filter(s=>isN(s.sleepTime)),nights=ss.filter(s=>!isN(s.sleepTime));
   const feeds=D.feedings.filter(f=>dk(f.time)===day),baths=D.baths.filter(b=>dk(b.time)===day);
   const nd=naps.map(s=>dm(s.sleepTime,s.wakeTime)),wins=[];
-  const pn=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0).find(s=>dk(s.wakeTime)===day);
+  const pnAll=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0&&dk(s.wakeTime)===day&&isN(s.wakeTime)).sort((a,b)=>new Date(b.wakeTime)-new Date(a.wakeTime));
+  const pn=pnAll.length?pnAll[0]:null;
   if(pn&&naps.length>0)wins.push(dm(pn.wakeTime,naps[0].sleepTime));
   for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
   const tn=nd.reduce((a,b)=>a+b,0);
