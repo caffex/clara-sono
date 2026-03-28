@@ -152,8 +152,9 @@ body.dark .acc-day{background:var(--card);}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v1.7</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.0</small></div>
   </div>
+  <div id="sync-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:8px;padding:4px 10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.8);font-weight:600">☁️ Sync ativo</div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
     <span class="pulse">💤</span> <span id="sleeping-text"></span>
   </div>
@@ -191,6 +192,79 @@ function loadDark(){try{darkMode=localStorage.getItem('clara-dark')==='true';}ca
 function applyDark(){document.body.classList.toggle('dark',darkMode);}
 function toggleDark(){darkMode=!darkMode;try{localStorage.setItem('clara-dark',darkMode?'true':'false');}catch(e){}applyDark();render();}
 
+// ===== GIST SYNC =====
+let gistToken='',gistId='',syncStatus='',lastSync='';
+function loadGist(){
+  try{gistToken=localStorage.getItem('clara-gist-token')||'';gistId=localStorage.getItem('clara-gist-id')||'';lastSync=localStorage.getItem('clara-last-sync')||'';}catch(e){}
+}
+function saveGistConfig(){
+  try{localStorage.setItem('clara-gist-token',gistToken);localStorage.setItem('clara-gist-id',gistId);localStorage.setItem('clara-last-sync',lastSync);}catch(e){}
+}
+function mergeData(local,remote){
+  const merged={sessions:[...local.sessions],feedings:[...local.feedings],baths:[...local.baths]};
+  const localIds=new Set([...local.sessions.map(s=>s.id),...local.feedings.map(f=>f.id),...local.baths.map(b=>b.id)]);
+  let added=0;
+  (remote.sessions||[]).forEach(s=>{if(!localIds.has(s.id)){if(s.note===undefined)s.note='';merged.sessions.push(s);added++;}});
+  (remote.feedings||[]).forEach(f=>{if(!localIds.has(f.id)){if(f.note===undefined)f.note='';merged.feedings.push(f);added++;}});
+  (remote.baths||[]).forEach(b=>{if(!localIds.has(b.id)){if(b.note===undefined)b.note='';merged.baths.push(b);added++;}});
+  return{merged,added};
+}
+async function gistCreate(){
+  if(!gistToken){syncStatus='❌ Token não configurado';render();return;}
+  syncStatus='⏳ Criando Gist...';render();
+  try{
+    const res=await fetch('https://api.github.com/gists',{method:'POST',headers:{'Authorization':'token '+gistToken,'Content-Type':'application/json'},
+      body:JSON.stringify({description:'Sono da Clara - dados sync','public':false,files:{'clara-sono-data.json':{content:JSON.stringify(D,null,2)}}})});
+    if(!res.ok){syncStatus='❌ Erro ao criar: '+res.status;render();return;}
+    const data=await res.json();
+    gistId=data.id;lastSync=new Date().toISOString();saveGistConfig();
+    syncStatus='✅ Gist criado! ID: '+gistId;render();
+  }catch(e){syncStatus='❌ Erro: '+e.message;render();}
+}
+async function gistPush(){
+  if(!gistToken||!gistId){syncStatus='❌ Configure token e Gist ID';render();return;}
+  syncStatus='⏳ Enviando...';render();
+  try{
+    // Pull first to merge
+    const getRes=await fetch('https://api.github.com/gists/'+gistId,{headers:{'Authorization':'token '+gistToken}});
+    if(getRes.ok){
+      const gist=await getRes.json();
+      const remoteContent=gist.files['clara-sono-data.json']?.content;
+      if(remoteContent){
+        const remote=JSON.parse(remoteContent);
+        const{merged,added}=mergeData(D,remote);
+        D=merged;save();
+      }
+    }
+    // Now push merged data
+    const res=await fetch('https://api.github.com/gists/'+gistId,{method:'PATCH',headers:{'Authorization':'token '+gistToken,'Content-Type':'application/json'},
+      body:JSON.stringify({files:{'clara-sono-data.json':{content:JSON.stringify(D,null,2)}}})});
+    if(!res.ok){syncStatus='❌ Erro ao enviar: '+res.status;render();return;}
+    lastSync=new Date().toISOString();saveGistConfig();
+    syncStatus='✅ Sincronizado!';render();
+  }catch(e){syncStatus='❌ Erro: '+e.message;render();}
+}
+async function gistPull(){
+  if(!gistToken||!gistId){syncStatus='❌ Configure token e Gist ID';render();return;}
+  syncStatus='⏳ Baixando...';render();
+  try{
+    const res=await fetch('https://api.github.com/gists/'+gistId,{headers:{'Authorization':'token '+gistToken}});
+    if(!res.ok){syncStatus='❌ Erro ao baixar: '+res.status;render();return;}
+    const gist=await res.json();
+    const content=gist.files['clara-sono-data.json']?.content;
+    if(!content){syncStatus='❌ Arquivo não encontrado no Gist';render();return;}
+    const remote=JSON.parse(content);
+    const{merged,added}=mergeData(D,remote);
+    D=merged;save();
+    lastSync=new Date().toISOString();saveGistConfig();
+    syncStatus=`✅ Sincronizado! +${added} registros novos`;render();
+  }catch(e){syncStatus='❌ Erro: '+e.message;render();}
+}
+async function autoSync(){
+  if(!gistToken||!gistId)return;
+  try{await gistPush();}catch(e){}
+}
+
 // ===== PERSIST =====
 function load(){
   try{
@@ -202,7 +276,9 @@ function load(){
     D.baths.forEach(b=>{if(b.note===undefined)b.note='';});
   }catch(e){}
 }
-function save(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}badge();}
+function save(){try{localStorage.setItem(SK,JSON.stringify(D));}catch(e){}badge();debouncedSync();}
+let _syncTimer=null;
+function debouncedSync(){if(!gistToken||!gistId)return;clearTimeout(_syncTimer);_syncTimer=setTimeout(()=>autoSync(),5000);}
 function gid(){return Math.random().toString(36).slice(2,10);}
 
 // ===== HELPERS =====
@@ -220,6 +296,8 @@ function badge(){
   const o=openS(),b=document.getElementById('sleeping-badge'),tx=document.getElementById('sleeping-text');
   if(o){b.style.display='flex';const m=Math.round(dm(o.sleepTime,new Date().toISOString()));tx.textContent=`Clara dormindo desde ${fm(o.sleepTime)} (${fdr(m)})`;}
   else b.style.display='none';
+  const sb=document.getElementById('sync-badge');
+  if(sb)sb.style.display=(gistToken&&gistId)?'block':'none';
 }
 
 // Night of day X = 20:00 day X → 07:00 day X+1
@@ -650,6 +728,9 @@ function rAna(el){
 // ===== RENDER SYNC =====
 function rSync(el){
   const ts=D.sessions.length,tf=D.feedings.length,tb=D.baths.length;
+  const connected=gistToken&&gistId;
+  const syncAge=lastSync?fdr((Date.now()-new Date(lastSync).getTime())/60000)+' atrás':'nunca';
+
   el.innerHTML=`<div class="fade" style="padding-top:16px">
     <div class="card"><div class="card-title">🎨 Aparência</div>
       <div class="toggle-row">
@@ -657,25 +738,64 @@ function rSync(el){
         <label class="toggle"><input type="checkbox" ${darkMode?'checked':''} onchange="toggleDark()"><span class="slider"></span></label>
       </div>
     </div>
-    <div class="card"><div class="card-title">🔄 Sincronização</div>
-      <p style="font-size:13px;color:var(--soft);margin-bottom:16px;line-height:1.5">Exporte em um celular, importe no outro. O merge só adiciona novos registros.</p>
-      <div style="font-size:13px;margin-bottom:16px;padding:12px;background:var(--nap-l);border-radius:10px">📊 <strong>${ts}</strong> sonos · <strong>${tf}</strong> mamadas · <strong>${tb}</strong> banhos</div>
+
+    <div class="card" style="border-left:3px solid ${connected?'var(--win)':'var(--feed)'}">
+      <div class="card-title">☁️ Sync na nuvem (GitHub Gist)</div>
+      ${connected?`
+        <div style="font-size:13px;padding:10px 14px;background:var(--win-l);border-radius:10px;margin-bottom:12px;line-height:1.5">
+          <strong style="color:var(--win)">✅ Conectado</strong><br>
+          📊 ${ts} sonos · ${tf} mamadas · ${tb} banhos<br>
+          🕐 Último sync: ${syncAge}
+        </div>
+        ${syncStatus?`<div style="font-size:12px;padding:8px 12px;background:var(--nap-l);border-radius:8px;margin-bottom:12px;font-weight:600">${syncStatus}</div>`:''}
+        <div class="sync-row" style="margin-bottom:12px">
+          <button class="sync-btn" style="background:var(--night);color:#fff" onclick="gistPush()">🔄 Sincronizar agora</button>
+        </div>
+        <div style="font-size:11px;color:var(--soft);line-height:1.6;margin-bottom:12px">
+          O sync é automático a cada registro (com 5s de delay). Use o botão acima se quiser forçar.
+        </div>
+        <div style="font-size:11px;color:var(--soft);margin-bottom:8px"><strong>Gist ID:</strong> ${gistId}</div>
+        <button onclick="navigator.clipboard.writeText('${gistId}');this.textContent='✅ Copiado!';setTimeout(()=>this.textContent='📋 Copiar Gist ID',2000)" style="padding:8px 16px;border-radius:8px;background:var(--nap-l);color:var(--nap);font-weight:700;font-size:12px;width:100%;margin-bottom:8px">📋 Copiar Gist ID</button>
+        <button onclick="if(confirm('Desconectar sync? Os dados locais não serão apagados.')){gistToken='';gistId='';lastSync='';saveGistConfig();syncStatus='';render();}" style="padding:8px 16px;border-radius:8px;background:none;border:1px solid var(--danger);color:var(--danger);font-weight:600;font-size:12px;width:100%">Desconectar</button>
+      `:`
+        <div style="font-size:13px;color:var(--soft);line-height:1.6;margin-bottom:14px">
+          Sincronize os dados entre celulares automaticamente usando GitHub Gist.
+        </div>
+        ${syncStatus?`<div style="font-size:12px;padding:8px 12px;background:var(--nap-l);border-radius:8px;margin-bottom:12px;font-weight:600">${syncStatus}</div>`:''}
+        <div class="input-group"><label>Token GitHub (com permissão <strong>gist</strong>)</label><input type="text" id="cfg-token" placeholder="ghp_..." value="${esc(gistToken)}"></div>
+        <div class="input-group"><label>Gist ID (deixe vazio para criar novo)</label><input type="text" id="cfg-gist" placeholder="Ex: a1b2c3d4e5f6..." value="${esc(gistId)}"></div>
+        <button onclick="gistToken=document.getElementById('cfg-token').value.trim();gistId=document.getElementById('cfg-gist').value.trim();saveGistConfig();if(!gistId){gistCreate();}else{gistPull();}" class="add-btn" style="background:var(--night)">🚀 Conectar</button>
+        <div style="font-size:11px;color:var(--soft);line-height:1.6;margin-top:12px">
+          <strong>Passo a passo:</strong><br>
+          1. Vá em github.com → Settings → Developer Settings → Personal Access Tokens → Tokens (classic)<br>
+          2. Gere um token com permissão <strong>gist</strong><br>
+          3. Cole acima e toque em Conectar<br>
+          4. Copie o Gist ID e mande pra sua esposa<br>
+          5. No celular dela: cole o token + Gist ID e conecte
+        </div>
+      `}
+    </div>
+
+    <div class="card"><div class="card-title">📦 Backup manual</div>
+      <div style="font-size:13px;color:var(--soft);margin-bottom:12px">Export/import por arquivo JSON</div>
       <div class="sync-row"><button class="sync-btn" style="background:var(--win-l);color:var(--win)" onclick="exportD()">📤 Exportar</button><button class="sync-btn" style="background:var(--nap-l);color:var(--nap)" onclick="importD()">📥 Importar</button></div>
     </div>
+
     <div class="card"><div class="card-title">📱 Instalar no iPhone</div>
       <div style="font-size:13px;color:var(--soft);line-height:1.8"><strong>1.</strong> Abra no <strong>Safari</strong><br><strong>2.</strong> Toque em <strong>⬆️ Compartilhar</strong><br><strong>3.</strong> Toque em <strong>"Adicionar à Tela de Início"</strong><br><strong>4.</strong> Pronto! Vira um app 🎉</div>
     </div>
-    <div class="card"><div class="card-title">💡 Backup semanal</div>
-      <div style="font-size:13px;color:var(--soft);line-height:1.7">Exporte o JSON <strong>1x por semana</strong> e mande pra vocês no WhatsApp.</div>
-    </div>
+
     <div class="card" style="border-left:3px solid var(--danger)"><div class="card-title">⚠️ Zona perigosa</div><button class="reset-btn" onclick="clearAll()" style="margin:0">🗑 Apagar todos os dados</button></div>
   </div>`;
 }
 
 // ===== INIT =====
 loadDark();
+loadGist();
 load();render();
 setInterval(badge,60000);
+// Auto-sync on load
+if(gistToken&&gistId)setTimeout(()=>gistPull(),1000);
 </script>
 </body>
 </html>
