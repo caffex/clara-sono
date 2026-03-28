@@ -110,6 +110,41 @@ textarea{resize:vertical;min-height:60px;font-size:13px;}
 .filter-btn{padding:6px 14px;border-radius:8px;border:2px solid var(--border);background:#fff;color:var(--soft);font-weight:700;font-size:12px;}
 .filter-btn.active{border-color:var(--text);background:var(--text);color:#fff;}
 .history-day-header{font-size:13px;font-weight:800;color:var(--accent);margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid var(--accent-l);}
+
+/* Accordion */
+.acc-day{margin-bottom:8px;border-radius:14px;overflow:hidden;background:var(--card);box-shadow:0 2px 10px rgba(45,42,74,.05);}
+.acc-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer;-webkit-user-select:none;user-select:none;}
+.acc-header .acc-title{font-size:13px;font-weight:800;color:var(--accent);}
+.acc-header .acc-badges{display:flex;gap:4px;font-size:11px;}
+.acc-header .acc-badge{padding:2px 8px;border-radius:6px;font-weight:700;font-size:10px;}
+.acc-header .acc-arrow{font-size:14px;color:var(--soft);transition:transform .2s;}
+.acc-header.open .acc-arrow{transform:rotate(180deg);}
+.acc-body{padding:0 12px 12px;display:none;}
+.acc-body.open{display:block;}
+
+/* Dark mode */
+body.dark{--bg:#1A1A2E;--card:#252542;--text:#E8E6F0;--soft:#8B87A8;--border:#3A3755;--nap-l:#2A3555;--night-l:#2A2555;--feed-l:#3A2E22;--win-l:#1E3530;--accent-l:#3A2535;--bath-l:#1E3540;}
+body.dark input[type="datetime-local"],body.dark input[type="text"],body.dark textarea{background:var(--card);color:var(--text);border-color:var(--border);}
+body.dark .bottom-nav{background:var(--card);border-top-color:var(--border);}
+body.dark .filter-btn{background:var(--card);border-color:var(--border);}
+body.dark .filter-btn.active{background:var(--text);color:var(--card);}
+body.dark .modal{background:var(--bg);}
+body.dark .event-row .note{background:rgba(255,255,255,.06);}
+body.dark .quick-btn{background:var(--card)!important;}
+body.dark .day-btn{background:var(--card);border-color:var(--border);}
+body.dark .period-btn{background:var(--card);border-color:var(--border);}
+body.dark .acc-day{background:var(--card);}
+
+/* Toggle switch */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;}
+.toggle-label{font-size:14px;font-weight:700;}
+.toggle-sub{font-size:11px;color:var(--soft);}
+.toggle{position:relative;width:52px;height:30px;flex-shrink:0;}
+.toggle input{opacity:0;width:0;height:0;}
+.toggle .slider{position:absolute;inset:0;background:var(--border);border-radius:30px;cursor:pointer;transition:.3s;}
+.toggle .slider:before{content:'';position:absolute;height:24px;width:24px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s;}
+.toggle input:checked+.slider{background:var(--night);}
+.toggle input:checked+.slider:before{transform:translateX(22px);}
 </style>
 </head>
 <body>
@@ -117,7 +152,7 @@ textarea{resize:vertical;min-height:60px;font-size:13px;}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v1.6</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v1.7</small></div>
   </div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
     <span class="pulse">💤</span> <span id="sleeping-text"></span>
@@ -132,7 +167,7 @@ textarea{resize:vertical;min-height:60px;font-size:13px;}
   <button class="nav-btn" data-tab="history" onclick="switchTab('history')"><span>📋</span>Histórico</button>
   <button class="nav-btn" data-tab="panel" onclick="switchTab('panel')"><span>📊</span>Painel</button>
   <button class="nav-btn" data-tab="analytics" onclick="switchTab('analytics')"><span>📈</span>Análise</button>
-  <button class="nav-btn" data-tab="sync" onclick="switchTab('sync')"><span>🔄</span>Sync</button>
+  <button class="nav-btn" data-tab="sync" onclick="switchTab('sync')"><span>⚙️</span>Config</button>
 </nav>
 
 <script>
@@ -141,12 +176,20 @@ const REF={winMin:60,winMax:105,napsMin:3,napsMax:5,napMin:30,napMax:120,totalSl
 let D={sessions:[],feedings:[],baths:[]};
 let tab='log',selDay=dk(new Date()),period='week',charts={};
 let histFilters=new Set(['all']), histPage=0;
+let histOpen=new Set([dk(new Date())]);
 function toggleFilter(k){
   if(k==='all'){histFilters=new Set(['all']);}
   else{histFilters.delete('all');if(histFilters.has(k))histFilters.delete(k);else histFilters.add(k);if(histFilters.size===0)histFilters=new Set(['all']);}
   histPage=0;render();
 }
+function toggleDay(day){if(histOpen.has(day))histOpen.delete(day);else histOpen.add(day);render();}
 const HIST_PER_PAGE=30;
+
+// ===== DARK MODE =====
+let darkMode=false;
+function loadDark(){try{darkMode=localStorage.getItem('clara-dark')==='true';}catch(e){}applyDark();}
+function applyDark(){document.body.classList.toggle('dark',darkMode);}
+function toggleDark(){darkMode=!darkMode;try{localStorage.setItem('clara-dark',darkMode?'true':'false');}catch(e){}applyDark();render();}
 
 // ===== PERSIST =====
 function load(){
@@ -434,7 +477,6 @@ function buildEventList(day){
 
 // ===== RENDER HISTORY =====
 function rHist(el){
-  // Build ALL events across all days
   let all=[];
   D.sessions.forEach(s=>{
     const t=isN(s.sleepTime)?'nap':'night';
@@ -443,27 +485,19 @@ function rHist(el){
   D.feedings.forEach(f=>all.push({...f,_t:'feed',_s:new Date(f.time),_dk:dk(f.time)}));
   D.baths.forEach(b=>all.push({...b,_t:'bath',_s:new Date(b.time),_dk:dk(b.time)}));
 
-  // Filter
   if(!histFilters.has('all')) all=all.filter(e=>histFilters.has(e._t));
-
-  // Sort newest first
-  all.sort((a,b)=>b._s-a._s);
-
-  const total=all.length;
-  const paged=all.slice(0,(histPage+1)*HIST_PER_PAGE);
-  const hasMore=paged.length<total;
 
   // Group by day
   const grouped={};
-  paged.forEach(ev=>{
-    if(!grouped[ev._dk])grouped[ev._dk]=[];
-    grouped[ev._dk].push(ev);
-  });
+  all.forEach(ev=>{if(!grouped[ev._dk])grouped[ev._dk]=[];grouped[ev._dk].push(ev);});
   const dayKeys=Object.keys(grouped).sort().reverse();
+  const total=all.length;
+
+  const countBadge=(evs,type,emoji,color)=>{const c=evs.filter(e=>e._t===type||(type==='sleep'&&(e._t==='nap'||e._t==='night'))).length;return c>0?`<span class="acc-badge" style="background:${color}">${emoji}${c}</span>`:'';};
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
     <div class="card-title">📋 Histórico completo</div>
-    <div style="font-size:12px;color:var(--soft);margin-bottom:12px">${total} eventos registrados</div>
+    <div style="font-size:12px;color:var(--soft);margin-bottom:12px">${total} eventos em ${dayKeys.length} dias</div>
     <div class="filter-row">
       ${[['all','Todos'],['nap','Soneca'],['night','Noite'],['feed','Mamada'],['bath','Banho']].map(([k,l])=>
         `<button class="filter-btn ${histFilters.has(k)?'active':''}" onclick="toggleFilter('${k}')">${l}</button>`
@@ -472,9 +506,23 @@ function rHist(el){
     ${dayKeys.length===0?'<div class="empty-state"><div class="emoji">📋</div><div>Nenhum evento encontrado</div></div>':
       dayKeys.map(day=>{
         const evs=grouped[day].sort((a,b)=>a._s-b._s);
-        return`<div class="history-day-header">📅 ${fdFull(day+'T12:00:00')}</div>${evs.map(ev=>evHTML(ev)).join('')}`;
+        const isOpen=histOpen.has(day);
+        return`<div class="acc-day">
+          <div class="acc-header ${isOpen?'open':''}" onclick="toggleDay('${day}')">
+            <div>
+              <div class="acc-title">📅 ${fdFull(day+'T12:00:00')}</div>
+              <div class="acc-badges" style="margin-top:4px">
+                ${countBadge(evs,'nap','☀️ ','var(--nap-l)')}
+                ${countBadge(evs,'night','🌙 ','var(--night-l)')}
+                ${countBadge(evs,'feed','🍼 ','var(--feed-l)')}
+                ${countBadge(evs,'bath','🛁 ','var(--bath-l)')}
+              </div>
+            </div>
+            <span class="acc-arrow">▼</span>
+          </div>
+          <div class="acc-body ${isOpen?'open':''}">${evs.map(ev=>evHTML(ev)).join('')}</div>
+        </div>`;
       }).join('')}
-    ${hasMore?`<button onclick="histPage++;render()" style="width:100%;padding:14px;border-radius:12px;background:var(--nap-l);color:var(--nap);font-weight:800;font-size:13px;margin-top:12px">Carregar mais (${total-paged.length} restantes)</button>`:''}
   </div>`;
 }
 
@@ -603,6 +651,12 @@ function rAna(el){
 function rSync(el){
   const ts=D.sessions.length,tf=D.feedings.length,tb=D.baths.length;
   el.innerHTML=`<div class="fade" style="padding-top:16px">
+    <div class="card"><div class="card-title">🎨 Aparência</div>
+      <div class="toggle-row">
+        <div><div class="toggle-label">🌙 Modo escuro</div><div class="toggle-sub">Mais confortável à noite</div></div>
+        <label class="toggle"><input type="checkbox" ${darkMode?'checked':''} onchange="toggleDark()"><span class="slider"></span></label>
+      </div>
+    </div>
     <div class="card"><div class="card-title">🔄 Sincronização</div>
       <p style="font-size:13px;color:var(--soft);margin-bottom:16px;line-height:1.5">Exporte em um celular, importe no outro. O merge só adiciona novos registros.</p>
       <div style="font-size:13px;margin-bottom:16px;padding:12px;background:var(--nap-l);border-radius:10px">📊 <strong>${ts}</strong> sonos · <strong>${tf}</strong> mamadas · <strong>${tb}</strong> banhos</div>
@@ -619,6 +673,7 @@ function rSync(el){
 }
 
 // ===== INIT =====
+loadDark();
 load();render();
 setInterval(badge,60000);
 </script>
