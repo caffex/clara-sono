@@ -117,7 +117,7 @@ textarea{resize:vertical;min-height:60px;font-size:13px;}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v1.5</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v1.6</small></div>
   </div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
     <span class="pulse">💤</span> <span id="sleeping-text"></span>
@@ -214,11 +214,14 @@ function dayData(day){
   for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
   const tn=nd.reduce((a,b)=>a+b,0);
   const nw=nightData(day);
-  const tni=nw.totalSleep;
+  // Previous night = night of day before (the night that ends in this morning)
+  const pd=new Date(day+'T00:00:00');pd.setDate(pd.getDate()-1);
+  const nwPrev=nightData(dk(pd));
+  const tni=nwPrev.totalSleep;
   return{naps,nights,feeds,baths,nd,wins,nc:naps.length,fc:feeds.length,bc:baths.length,tn,tni,
     an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
     det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null})),
-    nw};
+    nw,nwPrev};
 }
 
 function allDays(){const s=new Set();D.sessions.forEach(x=>{s.add(dk(x.sleepTime));if(x.wakeTime)s.add(dk(x.wakeTime));});D.feedings.forEach(x=>s.add(dk(x.time)));D.baths.forEach(x=>s.add(dk(x.time)));return[...s].sort();}
@@ -502,7 +505,28 @@ function rPanel(el){
       <div style="font-size:11px;color:var(--soft);margin-top:8px">🟦 Soneca &nbsp; 🟪 Noite &nbsp; 🟠 Mamada &nbsp; 🔵 Banho</div>
     </div>
     ${d.det.length>0?`<div class="card"><div class="card-title">☀️ Detalhes das sonecas</div><div style="overflow-x:auto"><table class="data-table"><thead><tr><th>#</th><th>Dormiu</th><th>Acordou</th><th>Duração</th><th>Janela</th></tr></thead><tbody>${tr}</tbody></table></div><div style="font-size:10px;color:var(--soft);margin-top:8px">✓ Na faixa &nbsp;|&nbsp; ⚠ Fora da referência (3 meses)</div></div>`:''}
-    ${d.nw.sessions.length>0?`<div class="card"><div class="card-title">🌙 Noite de ${fd(selDay+'T12:00:00')}</div>
+    ${d.nwPrev.sessions.length>0?(()=>{const pv=d.nwPrev;const pd=new Date(selDay+'T00:00:00');pd.setDate(pd.getDate()-1);return`<div class="card"><div class="card-title">🌙 Noite de ${fd(dk(pd)+'T12:00:00')} → ${fd(selDay+'T12:00:00')}</div>
+      <div class="metric-grid" style="margin-bottom:14px">
+        <div class="metric" style="border-left-color:var(--night)"><div class="label">😴 Dormiu às</div><div class="value" style="font-size:20px">${fm(pv.firstSleep)}</div></div>
+        <div class="metric" style="border-left-color:var(--night)"><div class="label">👶 Acordou às</div><div class="value" style="font-size:20px">${fm(pv.lastWake)}</div></div>
+      </div>
+      <div class="metric-grid" style="margin-bottom:14px">
+        <div class="metric" style="border-left-color:var(--danger)"><div class="label">⚡ Despertares</div><div class="value">${pv.wakeCount}</div></div>
+        <div class="metric" style="border-left-color:var(--danger)"><div class="label">⏱️ Total acordada</div><div class="value" style="font-size:20px">${fdr(pv.totalAwake)}</div></div>
+      </div>
+      ${pv.wakings.length>0?`<div style="overflow-x:auto"><table class="data-table">
+        <thead><tr><th>#</th><th>Acordou</th><th>Dormiu</th><th>Duração</th><th>Mamou?</th></tr></thead>
+        <tbody>${pv.wakings.map((w,i)=>`<tr>
+          <td style="font-weight:800">${i+1}º</td>
+          <td>${fm(w.wokeAt)}</td>
+          <td>${fm(w.sleptAt)}</td>
+          <td style="font-weight:700;color:${w.dur>30?'var(--danger)':'var(--win)'}">${fdr(w.dur)}</td>
+          <td>${w.feedsDuring>0?'🍼 Sim':'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table></div>
+      <div style="font-size:10px;color:var(--soft);margin-top:8px">Despertares > 30min destacados em vermelho</div>`:''}
+    </div>`;})():''}
+    ${d.nw.sessions.length>0?`<div class="card"><div class="card-title">🌙 Noite de hoje</div>
       <div class="metric-grid" style="margin-bottom:14px">
         <div class="metric" style="border-left-color:var(--night)"><div class="label">😴 Dormiu às</div><div class="value" style="font-size:20px">${fm(d.nw.firstSleep)}</div></div>
         <div class="metric" style="border-left-color:var(--night)"><div class="label">👶 Acordou às</div><div class="value" style="font-size:20px">${fm(d.nw.lastWake)}</div></div>
@@ -518,7 +542,7 @@ function rPanel(el){
           <td>${fm(w.wokeAt)}</td>
           <td>${fm(w.sleptAt)}</td>
           <td style="font-weight:700;color:${w.dur>30?'var(--danger)':'var(--win)'}">${fdr(w.dur)}</td>
-          <td>${w.feedsDuring>0?'🍼 Sim':  '—'}</td>
+          <td>${w.feedsDuring>0?'🍼 Sim':'—'}</td>
         </tr>`).join('')}</tbody>
       </table></div>
       <div style="font-size:10px;color:var(--soft);margin-top:8px">Despertares > 30min destacados em vermelho</div>`:''}
@@ -535,7 +559,7 @@ function rPanel(el){
 function rAna(el){
   const now=new Date();let dl=[];const rng=period==='week'?6:29;
   for(let i=rng;i>=0;i--){const x=new Date(now);x.setDate(x.getDate()-i);dl.push(dk(x));}
-  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc,nwc:d.nw.wakeCount,nwa:Math.round(d.nw.totalAwake)};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0||d.nwc>0);
+  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc,nwc:d.nwPrev.wakeCount,nwa:Math.round(d.nwPrev.totalAwake)};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0||d.nwc>0);
   const aN=ad.length?(ad.reduce((a,b)=>a+b.nc,0)/ad.length).toFixed(1):'--';
   const aD=ad.length?fdr(ad.reduce((a,b)=>a+b.an,0)/ad.length):'--';
   const aW=ad.length?fdr(ad.reduce((a,b)=>a+b.aw,0)/ad.length):'--';
