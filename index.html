@@ -152,7 +152,7 @@ body.dark .acc-day{background:var(--card);}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.1</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.2</small></div>
   </div>
   <div id="sync-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:8px;padding:4px 10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.8);font-weight:600">☁️ Sync ativo</div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
@@ -183,7 +183,13 @@ function toggleFilter(k){
   else{histFilters.delete('all');if(histFilters.has(k))histFilters.delete(k);else histFilters.add(k);if(histFilters.size===0)histFilters=new Set(['all']);}
   histPage=0;render();
 }
-function toggleDay(day){if(histOpen.has(day))histOpen.delete(day);else histOpen.add(day);render();}
+function toggleDay(day){
+  if(histOpen.has(day))histOpen.delete(day);else histOpen.add(day);
+  const hdr=document.querySelector(`[data-day="${day}"] .acc-header`);
+  const body=document.querySelector(`[data-day="${day}"] .acc-body`);
+  if(hdr&&body){hdr.classList.toggle('open');body.classList.toggle('open');}
+  else render();
+}
 const HIST_PER_PAGE=30;
 
 // ===== DARK MODE =====
@@ -304,7 +310,7 @@ function fdFull(d){const t=new Date(d),ds=['Dom','Seg','Ter','Qua','Qui','Sex','
 function fdr(m){if(!m&&m!==0)return'--';const h=Math.floor(m/60),mi=Math.round(m%60);return h>0?`${h}h${mi>0?String(mi).padStart(2,'0')+'m':''}`:  `${mi}min`;}
 function dm(a,b){return(new Date(b)-new Date(a))/60000;}
 function isN(t){const h=new Date(t).getHours(),m=new Date(t).getMinutes();return h>=7&&(h<19||(h===19&&m===0));}
-function openS(){return D.sessions.find(s=>!s.wakeTime);}
+function openS(){return aSessions().find(s=>!s.wakeTime);}
 function esc(s){if(!s)return'';return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 function badge(){
@@ -321,7 +327,7 @@ function nightData(day){
   const nd=new Date(day+'T00:00:00');nd.setDate(nd.getDate()+1);
   const nightEnd=new Date(dk(nd)+'T07:00:00').getTime();
   // All completed night sessions overlapping this window
-  const ns=D.sessions.filter(s=>{
+  const ns=aSessions().filter(s=>{
     if(!s.wakeTime)return false;
     const st=new Date(s.sleepTime).getTime(),wk=new Date(s.wakeTime).getTime();
     return wk>st&&st>=nightStart&&st<nightEnd;
@@ -331,7 +337,7 @@ function nightData(day){
   for(let i=0;i<ns.length-1;i++){
     const wokeAt=ns[i].wakeTime,sleptAt=ns[i+1].sleepTime;
     const dur=dm(wokeAt,sleptAt);
-    if(dur>0)wakings.push({wokeAt,sleptAt,dur,feedsDuring:D.feedings.filter(f=>{const ft=new Date(f.time).getTime();return ft>=new Date(wokeAt).getTime()&&ft<=new Date(sleptAt).getTime();}).length});
+    if(dur>0)wakings.push({wokeAt,sleptAt,dur,feedsDuring:aFeedings().filter(f=>{const ft=new Date(f.time).getTime();return ft>=new Date(wokeAt).getTime()&&ft<=new Date(sleptAt).getTime();}).length});
   }
   const totalAwake=wakings.reduce((a,w)=>a+w.dur,0);
   const totalSleep=ns.reduce((a,s)=>a+dm(s.sleepTime,s.wakeTime),0);
@@ -341,11 +347,11 @@ function nightData(day){
 }
 
 function dayData(day){
-  const ss=D.sessions.filter(s=>dk(s.sleepTime)===day&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
+  const ss=aSessions().filter(s=>dk(s.sleepTime)===day&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0).sort((a,b)=>new Date(a.sleepTime)-new Date(b.sleepTime));
   const naps=ss.filter(s=>isN(s.sleepTime)),nights=ss.filter(s=>!isN(s.sleepTime));
-  const feeds=D.feedings.filter(f=>dk(f.time)===day),baths=D.baths.filter(b=>dk(b.time)===day);
+  const feeds=aFeedings().filter(f=>dk(f.time)===day),baths=aBaths().filter(b=>dk(b.time)===day);
   const nd=naps.map(s=>dm(s.sleepTime,s.wakeTime)),wins=[];
-  const pnAll=D.sessions.filter(s=>!isN(s.sleepTime)&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0&&dk(s.wakeTime)===day&&isN(s.wakeTime)).sort((a,b)=>new Date(b.wakeTime)-new Date(a.wakeTime));
+  const pnAll=aSessions().filter(s=>!isN(s.sleepTime)&&s.wakeTime&&dm(s.sleepTime,s.wakeTime)>0&&dk(s.wakeTime)===day&&isN(s.wakeTime)).sort((a,b)=>new Date(b.wakeTime)-new Date(a.wakeTime));
   const pn=pnAll.length?pnAll[0]:null;
   if(pn&&naps.length>0)wins.push(dm(pn.wakeTime,naps[0].sleepTime));
   for(let i=1;i<naps.length;i++)wins.push(dm(naps[i-1].wakeTime,naps[i].sleepTime));
@@ -361,7 +367,7 @@ function dayData(day){
     nw,nwPrev};
 }
 
-function allDays(){const s=new Set();D.sessions.forEach(x=>{s.add(dk(x.sleepTime));if(x.wakeTime)s.add(dk(x.wakeTime));});D.feedings.forEach(x=>s.add(dk(x.time)));D.baths.forEach(x=>s.add(dk(x.time)));return[...s].sort();}
+function allDays(){const s=new Set();aSessions().forEach(x=>{s.add(dk(x.sleepTime));if(x.wakeTime)s.add(dk(x.wakeTime));});aFeedings().forEach(x=>s.add(dk(x.time)));aBaths().forEach(x=>s.add(dk(x.time)));return[...s].sort();}
 
 // ===== ACTIONS =====
 function qSleep(){D.sessions.push({id:gid(),sleepTime:new Date().toISOString(),wakeTime:null,note:''});save();render();}
@@ -371,19 +377,23 @@ function qBath(){D.baths.push({id:gid(),time:new Date().toISOString(),note:''});
 
 function addMS(){
   const s=document.getElementById('m-sleep').value,w=document.getElementById('m-wake').value,n=document.getElementById('m-sleep-note').value;
-  if(!s||!w)return;
+  if(!s||!w){alert('Preencha os dois horários');return;}
+  if(new Date(w)<=new Date(s)){alert('Horário de acordar deve ser depois de dormir');return;}
+  if(new Date(s)>new Date()){alert('Não é possível registrar sono no futuro');return;}
   D.sessions.push({id:gid(),sleepTime:new Date(s).toISOString(),wakeTime:new Date(w).toISOString(),note:n||''});
   save();render();
 }
 function addMF(){
   const f=document.getElementById('m-feed').value,n=document.getElementById('m-feed-note').value;
-  if(!f)return;
+  if(!f){alert('Preencha o horário');return;}
+  if(new Date(f)>new Date()){alert('Não é possível registrar mamada no futuro');return;}
   D.feedings.push({id:gid(),time:new Date(f).toISOString(),note:n||''});
   save();render();
 }
 function addMB(){
   const b=document.getElementById('m-bath').value,n=document.getElementById('m-bath-note').value;
-  if(!b)return;
+  if(!b){alert('Preencha o horário');return;}
+  if(new Date(b)>new Date()){alert('Não é possível registrar banho no futuro');return;}
   D.baths.push({id:gid(),time:new Date(b).toISOString(),note:n||''});
   save();render();
 }
@@ -415,9 +425,14 @@ function addNW(){
   }
   save();render();
 }
-function remS(id){if(!confirm('Excluir este registro de sono?'))return;D.sessions=D.sessions.filter(s=>s.id!==id);save();render();}
-function remF(id){if(!confirm('Excluir esta mamada?'))return;D.feedings=D.feedings.filter(f=>f.id!==id);save();render();}
-function remB(id){if(!confirm('Excluir este banho?'))return;D.baths=D.baths.filter(b=>b.id!==id);save();render();}
+function remS(id){if(!confirm('Excluir este registro de sono?'))return;const s=D.sessions.find(s=>s.id===id);if(s)s.deleted=true;save();render();}
+function remF(id){if(!confirm('Excluir esta mamada?'))return;const f=D.feedings.find(f=>f.id===id);if(f)f.deleted=true;save();render();}
+function remB(id){if(!confirm('Excluir este banho?'))return;const b=D.baths.find(b=>b.id===id);if(b)b.deleted=true;save();render();}
+
+// Active (non-deleted) data accessors
+function aSessions(){return D.sessions.filter(s=>!s.deleted);}
+function aFeedings(){return D.feedings.filter(f=>!f.deleted);}
+function aBaths(){return D.baths.filter(b=>!b.deleted);}
 
 // ===== EDIT MODAL =====
 function editEvent(type,id){
@@ -459,6 +474,7 @@ function saveEdit(type,id){
   if(type==='session'){
     const item=D.sessions.find(s=>s.id===id);if(!item)return;
     const s=document.getElementById('ed-sleep').value,w=document.getElementById('ed-wake').value;
+    if(s&&w&&new Date(w)<=new Date(s)){alert('Horário de acordar deve ser depois de dormir');return;}
     if(s)item.sleepTime=new Date(s).toISOString();
     if(w)item.wakeTime=new Date(w).toISOString();
     item.note=document.getElementById('ed-note').value;
@@ -559,7 +575,7 @@ function rLog(el){
 
 function buildEventList(day){
   const dd=dayData(day);
-  const open=D.sessions.filter(s=>!s.wakeTime&&dk(s.sleepTime)===day);
+  const open=aSessions().filter(s=>!s.wakeTime&&dk(s.sleepTime)===day);
   return[
     ...dd.naps.map(s=>({...s,_t:'nap',_s:new Date(s.sleepTime)})),
     ...dd.nights.map(s=>({...s,_t:'night',_s:new Date(s.sleepTime)})),
@@ -572,12 +588,12 @@ function buildEventList(day){
 // ===== RENDER HISTORY =====
 function rHist(el){
   let all=[];
-  D.sessions.forEach(s=>{
+  aSessions().forEach(s=>{
     const t=isN(s.sleepTime)?'nap':'night';
     all.push({...s,_t:t,_s:new Date(s.sleepTime),_dk:dk(s.sleepTime)});
   });
-  D.feedings.forEach(f=>all.push({...f,_t:'feed',_s:new Date(f.time),_dk:dk(f.time)}));
-  D.baths.forEach(b=>all.push({...b,_t:'bath',_s:new Date(b.time),_dk:dk(b.time)}));
+  aFeedings().forEach(f=>all.push({...f,_t:'feed',_s:new Date(f.time),_dk:dk(f.time)}));
+  aBaths().forEach(b=>all.push({...b,_t:'bath',_s:new Date(b.time),_dk:dk(b.time)}));
 
   if(!histFilters.has('all')) all=all.filter(e=>histFilters.has(e._t));
 
@@ -601,7 +617,7 @@ function rHist(el){
       dayKeys.map(day=>{
         const evs=grouped[day].sort((a,b)=>a._s-b._s);
         const isOpen=histOpen.has(day);
-        return`<div class="acc-day">
+        return`<div class="acc-day" data-day="${day}">
           <div class="acc-header ${isOpen?'open':''}" onclick="toggleDay('${day}')">
             <div>
               <div class="acc-title">📅 ${fdFull(day+'T12:00:00')}</div>
@@ -623,7 +639,7 @@ function rHist(el){
 // ===== RENDER PANEL =====
 function rPanel(el){
   const days=allDays().slice(-10),d=dayData(selDay);
-  const dss=D.sessions.filter(s=>{const sk=dk(s.sleepTime);return sk===selDay||(s.wakeTime&&dk(s.wakeTime)===selDay);}),dfe=D.feedings.filter(f=>dk(f.time)===selDay),dba=D.baths.filter(b=>dk(b.time)===selDay);
+  const dss=aSessions().filter(s=>{const sk=dk(s.sleepTime);return sk===selDay||(s.wakeTime&&dk(s.wakeTime)===selDay);}),dfe=aFeedings().filter(f=>dk(f.time)===selDay),dba=aBaths().filter(b=>dk(b.time)===selDay);
   const ds=new Date(selDay+'T00:00:00').getTime();
   let tb='',tf='',tba='';
   dss.forEach(s=>{const st=Math.max(0,(new Date(s.sleepTime).getTime()-ds)/864e5),en=s.wakeTime?Math.min(1,(new Date(s.wakeTime).getTime()-ds)/864e5):Math.min(1,(Date.now()-ds)/864e5),co=isN(s.sleepTime)?'var(--nap)':'var(--night)',w=Math.max(.5,(en-st)*100),lb=w>4?(s.wakeTime?fdr(dm(s.sleepTime,s.wakeTime)):'💤'):'';tb+=`<div class="tl-block" style="left:${st*100}%;width:${w}%;background:${co}">${lb}</div>`;});
@@ -701,12 +717,13 @@ function rPanel(el){
 function rAna(el){
   const now=new Date();let dl=[];const rng=period==='week'?6:29;
   for(let i=rng;i>=0;i--){const x=new Date(now);x.setDate(x.getDate()-i);dl.push(dk(x));}
-  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc,nwc:d.nwPrev.wakeCount,nwa:Math.round(d.nwPrev.totalAwake)};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0||d.nwc>0);
+  const ad=dl.map(day=>{const d=dayData(day),dt=new Date(day+'T12:00:00');const hasNight=d.nwPrev.sessions.length>0;return{day,label:`${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}`,an:Math.round(d.an),aw:Math.round(d.aw),nc:d.nc,tn:Math.round(d.tn),tni:Math.round(d.tni),fc:d.fc,bc:d.bc,nwc:hasNight?d.nwPrev.wakeCount:null,nwa:hasNight?Math.round(d.nwPrev.totalAwake):null};}).filter(d=>d.nc>0||d.fc>0||d.tni>0||d.bc>0||d.nwc>0);
   const aN=ad.length?(ad.reduce((a,b)=>a+b.nc,0)/ad.length).toFixed(1):'--';
   const aD=ad.length?fdr(ad.reduce((a,b)=>a+b.an,0)/ad.length):'--';
   const aW=ad.length?fdr(ad.reduce((a,b)=>a+b.aw,0)/ad.length):'--';
   const tB=ad.reduce((a,b)=>a+b.bc,0);
-  const aNW=ad.length?(ad.reduce((a,b)=>a+b.nwc,0)/ad.length).toFixed(1):'--';
+  const nightDays=ad.filter(d=>d.nwc!==null);
+  const aNW=nightDays.length?(nightDays.reduce((a,b)=>a+b.nwc,0)/nightDays.length).toFixed(1):'--';
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
     <div class="period-row"><button class="period-btn ${period==='week'?'active':''}" onclick="period='week';render()">7 dias</button><button class="period-btn ${period==='month'?'active':''}" onclick="period='month';render()">30 dias</button></div>
@@ -743,7 +760,7 @@ function rAna(el){
 
 // ===== RENDER SYNC =====
 function rSync(el){
-  const ts=D.sessions.length,tf=D.feedings.length,tb=D.baths.length;
+  const ts=aSessions().length,tf=aFeedings().length,tb=aBaths().length;
   const connected=gistToken&&gistId;
   const syncAge=lastSync?fdr((Date.now()-new Date(lastSync).getTime())/60000)+' atrás':'nunca';
 
