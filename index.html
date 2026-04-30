@@ -152,7 +152,7 @@ body.dark .acc-day{background:var(--card);}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.2</small></div>
+    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.3</small></div>
   </div>
   <div id="sync-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:8px;padding:4px 10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.8);font-weight:600">☁️ Sync ativo</div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
@@ -361,9 +361,11 @@ function dayData(day){
   const pd=new Date(day+'T00:00:00');pd.setDate(pd.getDate()-1);
   const nwPrev=nightData(dk(pd));
   const tni=nwPrev.totalSleep;
+  const nightStart=nw.firstSleep||null;
   return{naps,nights,feeds,baths,nd,wins,nc:naps.length,fc:feeds.length,bc:baths.length,tn,tni,
     an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
     det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null})),
+    lastNapToNight:(naps.length>0&&nightStart)?dm(naps[naps.length-1].wakeTime,nightStart):null,
     nw,nwPrev};
 }
 
@@ -648,9 +650,10 @@ function rPanel(el){
 
   let tr='';
   d.det.forEach((n,i)=>{const dok=n.dur>=REF.napMin&&n.dur<=REF.napMax,wok=n.win===null||(n.win>=REF.winMin&&n.win<=REF.winMax);tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${n.win===null?'':(wok?'ok':'warn')}">${n.win!==null?fdr(n.win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
+  if(d.lastNapToNight!==null){const wok=d.lastNapToNight>=REF.winMin&&d.lastNapToNight<=REF.winMax;tr+=`<tr style="border-top:2px solid var(--night-l)"><td style="font-weight:800;color:var(--night)">🌙</td><td colspan="2" style="color:var(--soft);font-size:11px">→ Dormiu à noite</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(d.lastNapToNight)} ${wok?'✓':'⚠'}</td></tr>`;}
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
-    <div class="day-scroll">${days.map(dy=>`<button class="day-btn ${dy===selDay?'active':''}" onclick="selDay='${dy}';render()">${fd(dy+'T12:00:00')}</button>`).join('')}${days.length===0?'<span style="font-size:13px;color:var(--soft)">Registre dados primeiro</span>':''}</div>
+    <div class="day-scroll">${days.slice().reverse().map(dy=>`<button class="day-btn ${dy===selDay?'active':''}" onclick="selDay='${dy}';render()">${fd(dy+'T12:00:00')}</button>`).join('')}${days.length===0?'<span style="font-size:13px;color:var(--soft)">Registre dados primeiro</span>':''}</div>
     <div class="metric-grid">
       <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Sonecas</div><div class="value">${d.nc}</div><div class="sub">Ref: ${REF.napsMin}–${REF.napsMax}</div></div>
       <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Duração Média</div><div class="value" style="font-size:20px">${fdr(d.an)}</div><div class="sub">Ref: ${fdr(REF.napMin)}–${fdr(REF.napMax)}</div></div>
