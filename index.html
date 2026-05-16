@@ -669,8 +669,11 @@ function rPanel(el){
 
   let tr='';
   // First row: morning wake → first nap window
-  if(d.morningWake&&d.naps.length>0){const w=dm(d.morningWake,d.naps[0].sleepTime),wok=w>=REF().winMin&&w<=REF().winMax;tr=`<tr style="background:var(--night-l)"><td style="font-weight:800;color:var(--night)">🌅</td><td style="font-size:11px;color:var(--soft)" colspan="2">Acordou ${fm(d.morningWake)}</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(w)} ${wok?'✓':'⚠'}</td></tr>`+tr;}
-  d.det.forEach((n,i)=>{const dok=n.dur>=REF().napMin&&n.dur<=REF().napMax,wok=n.win===null||(n.win>=REF().winMin&&n.win<=REF().winMax);tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${n.win===null?'':(wok?'ok':'warn')}">${n.win!==null?fdr(n.win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
+  const firstWin=d.morningWake&&d.naps.length>0?dm(d.morningWake,d.naps[0].sleepTime):null;
+  d.det.forEach((n,i)=>{const dok=n.dur>=REF().napMin&&n.dur<=REF().napMax;
+    const win=i===0&&firstWin!==null?firstWin:n.win;
+    const wok=win===null||(win>=REF().winMin&&win<=REF().winMax);
+    tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${win===null?'':(wok?'ok':'warn')}">${win!==null?fdr(win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
   if(d.lastNapToNight!==null){const wok=d.lastNapToNight>=REF().winMin&&d.lastNapToNight<=REF().winMax;tr+=`<tr style="border-top:2px solid var(--night-l);background:var(--night-l)"><td style="font-weight:800;color:var(--night)">🌙</td><td colspan="2" style="color:var(--night);font-size:11px;font-weight:700">Dormiu ${fm(d.nightSleepTime)}</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(d.lastNapToNight)} ${wok?'✓':'⚠'}</td></tr>`;}
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
