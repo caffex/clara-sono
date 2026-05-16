@@ -173,7 +173,7 @@ body.dark .acc-day{background:var(--card);}
 
 <script>
 const SK='clara-sleep-v4';
-const BIRTH=new Date('2025-12-25');
+const BIRTH=new Date('2025-12-25T12:00:00');
 function getAgeWeeks(){return Math.floor((Date.now()-BIRTH.getTime())/(7*24*3600*1000));}
 function getAgeMonths(){const n=new Date(),m=(n.getFullYear()-BIRTH.getFullYear())*12+(n.getMonth()-BIRTH.getMonth());return n.getDate()<BIRTH.getDate()?m-1:m;}
 function getAgeLabel(){const w=getAgeWeeks(),m=getAgeMonths();return m<3?`${w} semanas`:`${m} meses`;}
