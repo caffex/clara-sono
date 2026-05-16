@@ -152,7 +152,7 @@ body.dark .acc-day{background:var(--card);}
 <div class="header">
   <div style="display:flex;align-items:center;gap:12px">
     <span style="font-size:32px">🌙</span>
-    <div><h1>Sono da Clara</h1><small>Monitor de sono e rotina · v2.3</small></div>
+    <div><h1>Sono da Clara</h1><small id="age-label">Monitor de sono e rotina · v2.4</small></div>
   </div>
   <div id="sync-badge" style="display:none;background:rgba(255,255,255,.15);border-radius:8px;padding:4px 10px;margin-top:8px;font-size:11px;color:rgba(255,255,255,.8);font-weight:600">☁️ Sync ativo</div>
   <div id="sleeping-badge" class="sleeping-badge" style="display:none">
@@ -173,7 +173,22 @@ body.dark .acc-day{background:var(--card);}
 
 <script>
 const SK='clara-sleep-v4';
-const REF={winMin:60,winMax:105,napsMin:3,napsMax:5,napMin:30,napMax:120,totalSleep:15};
+const BIRTH=new Date('2025-12-25');
+function getAgeWeeks(){return Math.floor((Date.now()-BIRTH.getTime())/(7*24*3600*1000));}
+function getAgeMonths(){const n=new Date(),m=(n.getFullYear()-BIRTH.getFullYear())*12+(n.getMonth()-BIRTH.getMonth());return n.getDate()<BIRTH.getDate()?m-1:m;}
+function getAgeLabel(){const w=getAgeWeeks(),m=getAgeMonths();return m<3?`${w} semanas`:`${m} meses`;}
+// Reference values by age in weeks
+function getREF(){
+  const w=getAgeWeeks();
+  if(w<=6)  return{winMin:45, winMax:60, napsMin:4,napsMax:6,napMin:20,napMax:60, totalSleep:16,label:'0–6sem'};
+  if(w<=10) return{winMin:60, winMax:90, napsMin:4,napsMax:5,napMin:30,napMax:90, totalSleep:15,label:'7–10sem'};
+  if(w<=16) return{winMin:75, winMax:105,napsMin:3,napsMax:5,napMin:30,napMax:120,totalSleep:15,label:'3–4m'};
+  if(w<=24) return{winMin:90, winMax:120,napsMin:3,napsMax:4,napMin:30,napMax:120,totalSleep:14,label:'4–6m'};
+  if(w<=36) return{winMin:120,winMax:150,napsMin:2,napsMax:3,napMin:60,napMax:120,totalSleep:14,label:'6–9m'};
+  return      {winMin:150,winMax:210,napsMin:1,napsMax:2,napMin:60,napMax:120,totalSleep:13,label:'9m+'};
+}
+// Always use fresh REF
+function REF(){return getREF();}
 let D={sessions:[],feedings:[],baths:[]};
 let tab='log',selDay=dk(new Date()),period='week',charts={};
 let histFilters=new Set(['all']), histPage=0;
@@ -319,6 +334,8 @@ function badge(){
   else b.style.display='none';
   const sb=document.getElementById('sync-badge');
   if(sb)sb.style.display=(gistToken&&gistId)?'block':'none';
+  const al=document.getElementById('age-label');
+  if(al)al.textContent=`Clara · ${getAgeLabel()} · v2.4`;
 }
 
 // Night of day X = 20:00 day X → 07:00 day X+1
@@ -366,6 +383,8 @@ function dayData(day){
     an:nd.length?tn/nd.length:0,aw:wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0,
     det:naps.map((n,i)=>({...n,dur:nd[i],win:i<wins.length?wins[i]:null})),
     lastNapToNight:(naps.length>0&&nightStart)?dm(naps[naps.length-1].wakeTime,nightStart):null,
+    nightSleepTime:nightStart,
+    morningWake:pn?pn.wakeTime:null,
     nw,nwPrev};
 }
 
@@ -649,15 +668,17 @@ function rPanel(el){
   dba.forEach(b=>{const p=(new Date(b.time).getTime()-ds)/864e5;tba+=`<div class="tl-dot" style="left:${p*100}%;top:43px;background:var(--bath);border-radius:3px"></div>`;});
 
   let tr='';
-  d.det.forEach((n,i)=>{const dok=n.dur>=REF.napMin&&n.dur<=REF.napMax,wok=n.win===null||(n.win>=REF.winMin&&n.win<=REF.winMax);tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${n.win===null?'':(wok?'ok':'warn')}">${n.win!==null?fdr(n.win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
-  if(d.lastNapToNight!==null){const wok=d.lastNapToNight>=REF.winMin&&d.lastNapToNight<=REF.winMax;tr+=`<tr style="border-top:2px solid var(--night-l)"><td style="font-weight:800;color:var(--night)">🌙</td><td colspan="2" style="color:var(--soft);font-size:11px">→ Dormiu à noite</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(d.lastNapToNight)} ${wok?'✓':'⚠'}</td></tr>`;}
+  // First row: morning wake → first nap window
+  if(d.morningWake&&d.naps.length>0){const w=dm(d.morningWake,d.naps[0].sleepTime),wok=w>=REF().winMin&&w<=REF().winMax;tr=`<tr style="background:var(--night-l)"><td style="font-weight:800;color:var(--night)">🌅</td><td style="font-size:11px;color:var(--soft)" colspan="2">Acordou ${fm(d.morningWake)}</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(w)} ${wok?'✓':'⚠'}</td></tr>`+tr;}
+  d.det.forEach((n,i)=>{const dok=n.dur>=REF().napMin&&n.dur<=REF().napMax,wok=n.win===null||(n.win>=REF().winMin&&n.win<=REF().winMax);tr+=`<tr><td style="font-weight:800">${i+1}ª</td><td>${fm(n.sleepTime)}</td><td>${fm(n.wakeTime)}</td><td class="${dok?'ok':'warn'}">${fdr(n.dur)} ${dok?'✓':'⚠'}</td><td class="${n.win===null?'':(wok?'ok':'warn')}">${n.win!==null?fdr(n.win)+(wok?' ✓':' ⚠'):'—'}</td></tr>`;});
+  if(d.lastNapToNight!==null){const wok=d.lastNapToNight>=REF().winMin&&d.lastNapToNight<=REF().winMax;tr+=`<tr style="border-top:2px solid var(--night-l);background:var(--night-l)"><td style="font-weight:800;color:var(--night)">🌙</td><td colspan="2" style="color:var(--night);font-size:11px;font-weight:700">Dormiu ${fm(d.nightSleepTime)}</td><td>—</td><td class="${wok?'ok':'warn'}">${fdr(d.lastNapToNight)} ${wok?'✓':'⚠'}</td></tr>`;}
 
   el.innerHTML=`<div class="fade" style="padding-top:16px">
     <div class="day-scroll">${days.slice().reverse().map(dy=>`<button class="day-btn ${dy===selDay?'active':''}" onclick="selDay='${dy}';render()">${fd(dy+'T12:00:00')}</button>`).join('')}${days.length===0?'<span style="font-size:13px;color:var(--soft)">Registre dados primeiro</span>':''}</div>
     <div class="metric-grid">
-      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Sonecas</div><div class="value">${d.nc}</div><div class="sub">Ref: ${REF.napsMin}–${REF.napsMax}</div></div>
-      <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Duração Média</div><div class="value" style="font-size:20px">${fdr(d.an)}</div><div class="sub">Ref: ${fdr(REF.napMin)}–${fdr(REF.napMax)}</div></div>
-      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Janela Média</div><div class="value" style="font-size:20px">${fdr(d.aw)}</div><div class="sub">Ref: ${fdr(REF.winMin)}–${fdr(REF.winMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Sonecas</div><div class="value">${d.nc}</div><div class="sub">Ref: ${REF().napsMin}–${REF().napsMax}</div></div>
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Duração Média</div><div class="value" style="font-size:20px">${fdr(d.an)}</div><div class="sub">Ref: ${fdr(REF().napMin)}–${fdr(REF().napMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Janela Média</div><div class="value" style="font-size:20px">${fdr(d.aw)}</div><div class="sub">Ref: ${fdr(REF().winMin)}–${fdr(REF().winMax)}</div></div>
       <div class="metric" style="border-left-color:var(--feed)"><div class="label">🍼 Mamadas</div><div class="value">${d.fc}</div></div>
     </div>
     <div class="metric" style="border-left-color:var(--bath);margin-bottom:12px"><div class="label">🛁 Banhos</div><div class="value">${d.bc}</div>${d.baths.length>0?`<div class="sub">Horários: ${d.baths.map(b=>fm(b.time)).join(', ')}</div>`:''}</div>
@@ -712,7 +733,7 @@ function rPanel(el){
       <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Total Sonecas</div><div class="value" style="font-size:20px">${fdr(d.tn)}</div></div>
       <div class="metric" style="border-left-color:var(--night)"><div class="label">🌙 Total Noite</div><div class="value" style="font-size:20px">${fdr(d.tni)}</div></div>
     </div>
-    <div class="metric" style="border-left-color:var(--accent);margin-bottom:12px"><div class="label">💤 Total Geral</div><div class="value">${fdr(d.tn+d.tni)}</div><div class="sub">Ref: ~${REF.totalSleep}h/dia</div></div>
+    <div class="metric" style="border-left-color:var(--accent);margin-bottom:12px"><div class="label">💤 Total Geral</div><div class="value">${fdr(d.tn+d.tni)}</div><div class="sub">Ref: ~${REF().totalSleep}h/dia</div></div>
   </div>`;
 }
 
@@ -732,11 +753,11 @@ function rAna(el){
     <div class="period-row"><button class="period-btn ${period==='week'?'active':''}" onclick="period='week';render()">7 dias</button><button class="period-btn ${period==='month'?'active':''}" onclick="period='month';render()">30 dias</button></div>
     ${ad.length===0?'<div class="empty-state"><div class="emoji">📊</div><div style="font-weight:700">Sem dados no período</div><div style="font-size:13px">Registre na aba Registro</div></div>':`
     <div class="metric-grid">
-      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Média Sonecas/dia</div><div class="value">${aN}</div><div class="sub">Ref: ${REF.napsMin}–${REF.napsMax}</div></div>
+      <div class="metric" style="border-left-color:var(--nap)"><div class="label">☀️ Média Sonecas/dia</div><div class="value">${aN}</div><div class="sub">Ref: ${REF().napsMin}–${REF().napsMax}</div></div>
       <div class="metric" style="border-left-color:var(--nap)"><div class="label">⏱️ Média Duração</div><div class="value" style="font-size:20px">${aD}</div></div>
     </div>
     <div class="metric-grid">
-      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Média Janela</div><div class="value" style="font-size:20px">${aW}</div><div class="sub">Ref: ${fdr(REF.winMin)}–${fdr(REF.winMax)}</div></div>
+      <div class="metric" style="border-left-color:var(--win)"><div class="label">👀 Média Janela</div><div class="value" style="font-size:20px">${aW}</div><div class="sub">Ref: ${fdr(REF().winMin)}–${fdr(REF().winMax)}</div></div>
       <div class="metric" style="border-left-color:var(--bath)"><div class="label">🛁 Total Banhos</div><div class="value">${tB}</div></div>
     </div>
     <div class="metric" style="border-left-color:var(--danger);margin-bottom:12px"><div class="label">⚡ Média Despertares/noite</div><div class="value">${aNW}</div></div>
@@ -753,7 +774,7 @@ function rAna(el){
   const bo={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10,family:'Nunito'}}},y:{ticks:{font:{size:10,family:'Nunito'}}}}};
   const to=JSON.parse(JSON.stringify(bo));to.plugins.tooltip={callbacks:{label:c=>`${c.dataset.label}: ${fdr(c.raw)}`}};to.scales.y.ticks.callback=v=>fdr(v);
   charts.dur=new Chart(document.getElementById('ch-dur'),{type:'bar',data:{labels:lb,datasets:[{label:'Duração',data:ad.map(d=>d.an),backgroundColor:'#7BA4F7',borderRadius:6}]},options:to});
-  charts.win=new Chart(document.getElementById('ch-win'),{type:'line',data:{labels:lb,datasets:[{label:'Janela',data:ad.map(d=>d.aw),borderColor:'#5BC4A0',backgroundColor:'rgba(91,196,160,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#5BC4A0'},{label:'Máx',data:ad.map(()=>REF.winMax),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false},{label:'Mín',data:ad.map(()=>REF.winMin),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false}]},options:to});
+  charts.win=new Chart(document.getElementById('ch-win'),{type:'line',data:{labels:lb,datasets:[{label:'Janela',data:ad.map(d=>d.aw),borderColor:'#5BC4A0',backgroundColor:'rgba(91,196,160,.15)',fill:true,tension:.3,pointRadius:4,pointBackgroundColor:'#5BC4A0'},{label:'Máx',data:ad.map(()=>REF().winMax),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false},{label:'Mín',data:ad.map(()=>REF().winMin),borderColor:'#EF6B6B',borderDash:[5,5],pointRadius:0,fill:false}]},options:to});
   charts.nwk=new Chart(document.getElementById('ch-nwk'),{type:'bar',data:{labels:lb,datasets:[{label:'Despertares',data:ad.map(d=>d.nwc),backgroundColor:'#EF6B6B',borderRadius:6}]},options:{...bo,scales:{...bo.scales,y:{...bo.scales.y,ticks:{...bo.scales.y.ticks,stepSize:1}}}}});
   const so=JSON.parse(JSON.stringify(to));so.scales.x.stacked=true;so.scales.y.stacked=true;
   charts.tot=new Chart(document.getElementById('ch-tot'),{type:'bar',data:{labels:lb,datasets:[{label:'Sonecas',data:ad.map(d=>d.tn),backgroundColor:'#7BA4F7'},{label:'Noite',data:ad.map(d=>d.tni),backgroundColor:'#5B4FC4',borderRadius:{topLeft:6,topRight:6}}]},options:so});
